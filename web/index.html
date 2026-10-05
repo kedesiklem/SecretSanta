@@ -91,7 +91,12 @@ main { max-width: 1240px; margin: 0 auto; padding: 34px 32px 80px; }
 
 /* ---------- participants ---------- */
 .people { max-width: 860px; }
-.prow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 10px; align-items: center; padding: 6px 0; }
+.prow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 150px auto; gap: 10px; align-items: center; padding: 6px 0; }
+.prow .more { color: var(--ink-3); white-space: nowrap; text-align: right; overflow: hidden; text-overflow: ellipsis; }
+.prow .more[aria-expanded="true"] { color: var(--accent); }
+.prow .more.warn { color: var(--straw); }
+.pmore { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 12px; padding: 4px 0 10px 14px; border-left: 2px solid var(--line); }
+.nocontact { color: var(--straw); font-size: 13.5px; margin: 0 0 10px; }
 .rowerr { grid-column: 1 / -1; color: var(--cran); font-size: 13px; margin: -2px 0 4px 2px; display: none; }
 .rowerr.on { display: block; }
 .people-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
@@ -104,7 +109,25 @@ main { max-width: 1240px; margin: 0 auto; padding: 34px 32px 80px; }
 .rsec-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .rsec h3 { font: 600 19px/1.3 var(--serif); }
 .rsec .desc { color: var(--ink-2); font-size: 14px; margin-top: 2px; max-width: 62ch; }
-.rsec-actions { display: flex; gap: 6px; }
+ .rsec-actions { display: flex; gap: 6px; }
+.send-sum { color: var(--ink-2); margin: -6px 0 22px; }
+.send-sum b { color: var(--ink); font-weight: 600; }
+.send-grid { display: grid; gap: 8px; max-width: 900px; }
+.send-note { margin: 4px 0 6px; }
+.dlist { display: grid; grid-template-columns: minmax(0, 1fr) 84px max-content; column-gap: 16px; }
+.drow { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; gap: 8px 16px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+.drow .who { display: grid; min-width: 0; }
+.drow .who b { font-weight: 600; }
+.drow .who span { color: var(--ink-3); font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.drow .acts { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.drow a.btn { text-decoration: none; display: inline-block; }
+.st { justify-self: start; font-size: 12.5px; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.st.good { background: var(--pine-weak); color: var(--pine); }
+.st.bad { background: var(--cran-weak); color: var(--cran); cursor: help; }
+.st.idle { background: var(--line-soft); color: var(--ink-2); }
+.st.busy { background: var(--accent-weak); color: var(--accent); }
+.drow .dlg-err.on { display: block; color: var(--cran); font-size: 13px; }
+.empty-state { max-width: 440px; display: grid; gap: 8px; justify-items: start; margin-top: 10px; }
 .rsec h3 { display: inline-flex; align-items: center; gap: 9px; }
 .tip { position: relative; display: inline-flex; font-family: var(--sans); }
 .qm { appearance: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-hi); background: var(--paper); color: var(--ink-3); font: 600 12px/1 var(--sans); cursor: help; padding: 0; display: inline-grid; place-items: center; }
@@ -240,17 +263,6 @@ dialog::backdrop { background: rgba(5,7,16,.68); }
 .mi .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi .meta { grid-column: 2; font-size: 12.5px; color: var(--ink-3); }
 .bar { position: relative; }
-.optwrap { position: absolute; top: 10px; right: 32px; }
-.status { margin-right: 46px; }
-.optbtn { appearance: none; display: inline-flex; gap: 7px; align-items: center; background: none; border: 1px solid var(--line-hi); border-radius: 9px; padding: 5px 9px; font-size: 15px; cursor: pointer; color: var(--ink-2); font-size: 14px; }
-.optbtn:hover, .optbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--ink); }
-.optbtn .unsafe { color: var(--cran); font-weight: 600; font-size: 12.5px; }
-.menu.right { left: auto; right: 0; min-width: 300px; }
-.mi.check { grid-template-columns: 18px minmax(0, 1fr); }
-.mi .nm.wrap { white-space: normal; }
-.pairs { display: grid; gap: 0; max-height: min(52vh, 420px); overflow: auto; margin: 0 -4px; padding: 0 4px; }
-.pairs .pr { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); align-items: baseline; }
-.pairs .pr .ar { color: var(--accent); text-align: center; }
 .menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
 .mi.act { grid-template-columns: minmax(0, 1fr); color: var(--accent-hover); font-weight: 500; }
 
@@ -274,12 +286,14 @@ dialog::backdrop { background: rgba(5,7,16,.68); }
   .verdict { position: static; order: -1; }
   .bar, main { padding-left: 18px; padding-right: 18px; }
   .prow { grid-template-columns: 1fr; }
+  .pmore { padding-left: 10px; }
+  .dlist { grid-template-columns: 1fr auto; }
+  .drow { grid-template-columns: subgrid; }
+  .drow .acts { grid-column: 1 / -1; justify-content: flex-start; }
+  .drow .who { grid-column: 1; }
   .status { margin-left: 0; width: 100%; }
   .bar { position: relative; }
   .setwrap { position: static; }
-  .optwrap { position: static; padding-bottom: 8px; }
-  .status { margin-right: 0; }
-  .menu.right { left: 18px; right: 18px; min-width: 0; }
   .menu { left: 18px; right: 18px; top: 100%; width: auto; min-width: 0; max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -292,7 +306,6 @@ dialog::backdrop { background: rgba(5,7,16,.68); }
     <div class="setwrap" id="setwrap"></div>
     <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
     <div class="status" id="status"></div>
-    <div class="optwrap" id="optwrap"></div>
   </div>
 </header>
 <main id="panel" role="tabpanel" aria-live="off"></main>
@@ -327,7 +340,7 @@ const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = se
 
 async function api(path, body) {
   const headers = { "X-Santa-Token": TOKEN };
-  if (S.setId && !path.startsWith("/api/sets")) headers["X-Santa-Set"] = encodeURIComponent(S.setId);
+  if (S.setId && !path.startsWith("/api/sets") && !path.startsWith("/api/sms")) headers["X-Santa-Set"] = encodeURIComponent(S.setId);
   const opts = body === undefined
     ? { headers }
     : { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -380,21 +393,21 @@ const confirmDialog = ({ title, text, label, danger }) => openDialog({
 /* ================================================================
    State
 ================================================================ */
-const TABS = [["participants", "Participants"], ["rules", "Règles"], ["sim", "Simulation"], ["message", "Message"], ["draw", "Tirage"]];
+const TABS = [["participants", "Participants"], ["rules", "Règles"], ["sim", "Simulation"], ["message", "Message"], ["draw", "Tirage"], ["send", "Envoi"]];
 const KNOWN_RULE_KEYS = ["forbidden", "forced", "couples", "groups", "history", "settings"];
 
 const S = {
   tab: "rules", year: new Date().getFullYear(), setId: null, sets: [], epoch: 0, root: "",
   defaults: { priority: { force: 100, forbid: 50, history: 10 }, variables: ["santa", "recipient", "year"] },
-  participants: [],            // { name, email, prev }  (prev = name as last committed, for renames)
+  participants: [],            // { id, name, email, phone, messenger, other, prefer, prev, more }  (prev = name as last committed, for renames; more = extra contacts open)
   rules: normalizeRules({}),
   template: "", templateExists: true,
   saved: { p: "", r: "", t: "" },
   history: [],
-  unsafe: false,               // opt-in: lets the History section show past pairs. Never persisted.
   validation: null,
   sim: { running: false, stop: false, total: 100, agg: null, error: null },
   draw: { busy: false, lines: null, kind: null, ok: null },
+  send: { busy: false, stop: false, items: null, mailReady: true, smsReady: false, year: null, reason: "", errors: {}, now: null },
   preview: null,
 };
 
@@ -424,7 +437,19 @@ function serializeRules(r) {
   return out;
 }
 /** What goes to the server. The id (never shown) is what keeps a person recognisable across renames. */
-const serPeople = () => S.participants.map(p => ({ ...(p.id ? { id: p.id } : {}), name: p.name.trim(), email: p.email.trim() }));
+const CHANNELS = [["email", "E-mail"], ["phone", "SMS"], ["messenger", "Messenger"], ["other", "Autre"]];
+const CHANNEL_NAME = { email: "e-mail", phone: "SMS", messenger: "Messenger", other: "autre moyen", none: "aucun contact" };
+/** The ways to reach someone, as sent to the server: only what is filled in. */
+const serPeople = () => S.participants.map(p => {
+  const o = { ...(p.id ? { id: p.id } : {}), name: p.name.trim() };
+  for (const [c] of CHANNELS) if (p[c].trim()) o[c] = p[c].trim();
+  if (p.prefer && p[p.prefer] && p[p.prefer].trim()) o.prefer = p.prefer;
+  return o;
+});
+const emptyPerson = (extra = {}) => ({ name: "", email: "", phone: "", messenger: "", other: "", prefer: "", prev: "", ...extra });
+const fromServer = p => emptyPerson({ id: p.id || undefined, name: p.name || "", email: p.email || "", phone: p.phone || "", messenger: p.messenger || "",
+  other: p.other || "", prefer: p.prefer || "", prev: p.name || "", more: !!(p.phone || p.messenger || p.other) });
+const contactsOf = p => CHANNELS.filter(([c]) => p[c].trim()).map(([c]) => c);
 const normTemplate = t => t.replace(/\r\n/g, "\n").replace(/\n+$/, "") + "\n";
 const snap = () => ({ p: JSON.stringify(serPeople()), r: JSON.stringify(serializeRules(S.rules)), t: normTemplate(S.template) });
 function dirtyParts() { const n = snap(); return { p: n.p !== S.saved.p, r: n.r !== S.saved.r, t: n.t !== S.saved.t }; }
@@ -439,7 +464,7 @@ async function load() {
   if (epoch !== S.epoch) return;
   if (st._status === 404 && st.code === "no_set") { await refreshSets(); await pickInitialSet(); return; }
   if (!st.ok) { $("#panel").replaceChildren(h("div", { class: "err-box" }, st.error || "Impossible de charger l'état.")); return; }
-  S.participants = st.participants.map(p => ({ id: p.id || undefined, name: p.name || "", email: p.email || "", prev: p.name || "" }));
+  S.participants = st.participants.map(fromServer);
   S.rules = normalizeRules(st.rules);
   S.template = st.template.text; S.templateExists = st.template.exists;
   S.history = st.history; S.year = st.year;
@@ -499,46 +524,7 @@ function verdictTone() {
   if (v.violations.length) return { tone: "warn", text: "Possible, avec concessions" };
   return { tone: "good", text: "Règles valides" };
 }
-/* ---------- options menu and unsafe mode ---------- */
-let optSig = "";
-function renderOptions() {
-  const wrap = $("#optwrap"); if (!wrap) return;
-  const sig = String(S.unsafe); if (sig === optSig && wrap.firstChild) return;
-  optSig = sig; closeMenu();
-  wrap.replaceChildren(h("button", { class: "optbtn", "aria-haspopup": "menu", "aria-expanded": "false", title: "Options", "aria-label": "Options", onclick: toggleOptions },
-    h("span", { "aria-hidden": "true" }, "⚙️"), S.unsafe ? h("span", { class: "unsafe" }, "mode non sécurisé") : null));
-}
-function toggleOptions() {
-  if (menuEl) { const was = menuEl.classList.contains("right"); closeMenu(); if (was) return; }
-  const btn = $(".optbtn"); btn.setAttribute("aria-expanded", "true");
-  menuEl = h("div", { class: "menu right", role: "menu", "aria-label": "Options" },
-    h("button", { class: "mi check", role: "menuitemcheckbox", "aria-checked": String(S.unsafe), onclick: toggleUnsafe },
-      h("span", { class: "ck", "aria-hidden": "true" }, S.unsafe ? "✓" : ""), h("span", { class: "nm wrap" }, "Mode non sécurisé"),
-      h("span", { class: "meta" }, "Afficher qui a tiré qui lors des années passées (section Tirage).")));
-  $("#optwrap").append(menuEl);
-  const item = menuEl.querySelector(".mi"); item.focus();
-  menuEl.addEventListener("keydown", e => { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); btn.focus(); } });
-}
-async function toggleUnsafe() {
-  closeMenu();
-  if (S.unsafe) { S.unsafe = false; renderAll(); toast("Mode non sécurisé désactivé."); return; }
-  const ok = await confirmDialog({ title: "Activer le mode non sécurisé ?", label: "Activer", danger: true,
-    text: "Les tirages des années passées pourront être affichés avec leurs paires : qui offrait à qui. Si vous participez au tirage, ou si quelqu'un regarde votre écran, une partie du secret disparaît. Le tirage de l'année en cours reste caché. Le mode se désactive de lui-même au rechargement de la page." });
-  if (!ok) return;
-  S.unsafe = true; renderAll(); toast("Mode non sécurisé activé : les tirages passés ont un bouton « Voir ».", "error");
-}
-async function viewDraw(year) {
-  const res = await api("/api/history/read", { year, unsafe: true });
-  if (!res.ok) return toast(res.error, "error");
-  const relaxed = (res.relaxed_rules || []).map(r => typeof r === "string" ? r : `${r.source} (${r.violations})`);
-  openDialog({ title: `Tirage ${year}`, wide: true,
-    content: h("div", { class: "form-grid" },
-      h("p", { class: "help" }, `${plural(res.pairs.length, "paire", "paires")}, ${res.imported ? "importé" : "généré" + (res.generated_at ? " le " + res.generated_at.replace("T", " à ").slice(0, 18) : "")}.` + (relaxed.length ? " Concessions : " + relaxed.join(", ") + "." : "")),
-      h("div", { class: "pairs" }, ...res.pairs.map(p => h("div", { class: "pr" }, h("span", {}, p.from), h("span", { class: "ar", "aria-hidden": "true" }, "→"), h("span", {}, p.to))))),
-    actions: [{ label: "Fermer", kind: "primary", value: true }] });
-}
 function renderHeader() {
-  renderOptions();
   const d = dirtyParts(), dirty = d.p || d.r || d.t;
   const flags = S.setId ? { participants: d.p, rules: d.r, message: d.t } : {};
   renderSetSwitcher();
@@ -557,12 +543,13 @@ function go(tab) {
   S.tab = tab; history.replaceState(null, "", "#" + tab);
   renderAll();
   if (tab === "message") refreshPreview();
+  if (tab === "send") refreshDeliveries();
 }
 function renderAll() { renderHeader(); renderPanel(); }
 function renderPanel() {
   const p = $("#panel"); p.replaceChildren();
   if (!S.setId) return renderWelcome(p);
-  ({ participants: renderParticipants, rules: renderRules, sim: renderSim, message: renderMessage, draw: renderDraw })[S.tab](p);
+  ({ participants: renderParticipants, rules: renderRules, sim: renderSim, message: renderMessage, draw: renderDraw, send: renderSend })[S.tab](p);
 }
 const pageHead = (title, sub) => h("div", { class: "page-head" }, h("h2", {}, title), h("p", {}, sub));
 /** A small "?" that explains something on hover or keyboard focus (and on tap). */
@@ -589,7 +576,9 @@ function personErrors() {
       if (/[\\\/\x00-\x1f]/.test(n) || n.startsWith(".")) e.push("Pas de « / » ni de « \\ », et pas de point au début : le nom sert aussi de nom de fichier.");
       if (seen.has(n)) e.push("Ce nom existe déjà : chaque nom doit être unique."); else seen.add(n);
     }
-    if (!/^[^@\s]+@[^@\s]+$/.test(p.email.trim())) e.push("Adresse e-mail invalide.");
+    if (p.email.trim() && !/^[^@\s-][^@\s]*@[^@\s]+$/.test(p.email.trim())) e.push("Adresse e-mail invalide.");
+    const ph = p.phone.trim();
+    if (ph && !(/^\+?[0-9][0-9 .()\/-]*$/.test(ph) && (ph.match(/[0-9]/g) || []).length >= 6)) e.push("Numéro de téléphone invalide.");
     return e;
   });
 }
@@ -601,23 +590,36 @@ function refreshRowErrors() {
     const [n, m] = row.querySelectorAll("input");
     n.classList.toggle("bad", !S.participants[i].name.trim() || (errs[i] || []).some(x => /nom/i.test(x)));
     m.classList.toggle("bad", (errs[i] || []).some(x => /e-mail/.test(x)));
+    const tel = row.querySelector('[data-f="phone"]'); if (tel) tel.classList.toggle("bad", (errs[i] || []).some(x => /téléphone/.test(x)));
   });
 }
 function renderParticipants(panel) {
   panel.append(pageHead("Participants", "Les personnes qui offrent et reçoivent un cadeau. Chaque nom est unique : les règles s'y réfèrent."));
   const box = h("div", { class: "people" });
   box.append(h("div", { class: "count" }, `${S.participants.length} personne${s(S.participants.length)}`));
-  S.participants.forEach((p, i) => box.append(h("div", { class: "prow" },
-    h("input", { class: "in", value: p.name, placeholder: "Nom", "aria-label": `Nom du participant ${i + 1}`, autocomplete: "off",
-      oninput: e => { p.name = e.target.value; afterEdit(); refreshRowErrors(); },
-      onchange: () => commitName(p) }),
-    h("input", { class: "in", type: "email", value: p.email, placeholder: "adresse@exemple.org", "aria-label": `E-mail du participant ${i + 1}`,
-      oninput: e => { p.email = e.target.value; afterEdit(); refreshRowErrors(); },
-      onchange: () => scheduleValidate() }),
-    h("button", { class: "btn ghost danger", onclick: () => removePerson(i), "aria-label": `Retirer ${p.name || "ce participant"}` }, "Retirer"),
-    h("div", { class: "rowerr", role: "alert" }),
-  )));
-  if (!S.participants.length) box.append(h("p", { class: "empty" }, "Personne pour l'instant. Ajoutez au moins deux participants, ou collez une liste « Nom, e-mail »."));
+  const lost = S.participants.filter(p => p.name.trim() && !contactsOf(p).length).length;
+  if (lost) box.append(h("p", { class: "nocontact" }, `${plural(lost, "personne n'a", "personnes n'ont")} aucun moyen de contact. Le tirage reste possible ; leur message sera à remettre en main propre.`));
+  S.participants.forEach((p, i) => {
+    const extras = contactsOf(p).filter(c => c !== "email").map(c => CHANNEL_NAME[c]);
+    const none = !contactsOf(p).length;
+    const field = (key, props) => h("input", { class: "in", value: p[key], "data-f": key, autocomplete: "off", ...props,
+      oninput: e => { p[key] = e.target.value; afterEdit(); refreshRowErrors(); if (key !== "name") syncPrefer(p, row); },
+      onchange: () => key === "name" ? commitName(p) : scheduleValidate() });
+    const row = h("div", { class: "prow" },
+      field("name", { placeholder: "Nom", "aria-label": `Nom du participant ${i + 1}` }),
+      field("email", { type: "email", placeholder: "adresse@exemple.org (facultatif)", "aria-label": `E-mail du participant ${i + 1}` }),
+      h("button", { class: "btn ghost small more" + (none ? " warn" : ""), "aria-expanded": String(!!p.more), onclick: () => { p.more = !p.more; renderPanel(); },
+        title: "Téléphone, Messenger, autre moyen de contact" }, none ? "Aucun contact" : extras.length ? extras.join(" · ") : "Autres moyens"),
+      h("button", { class: "btn ghost danger", onclick: () => removePerson(i), "aria-label": `Retirer ${p.name || "ce participant"}` }, "Retirer"),
+      p.more ? h("div", { class: "pmore" },
+        h("label", { class: "field" }, "Téléphone (SMS, WhatsApp…)", field("phone", { type: "tel", placeholder: "+33 6 12 34 56 78", "aria-label": `Téléphone du participant ${i + 1}` })),
+        h("label", { class: "field" }, "Messenger", field("messenger", { placeholder: "nom d'utilisateur ou lien", "aria-label": `Messenger du participant ${i + 1}` })),
+        h("label", { class: "field" }, "Autre moyen", field("other", { placeholder: "ex. lui donner au déjeuner", "aria-label": `Autre moyen pour le participant ${i + 1}` })),
+        h("label", { class: "field prefer" }, "Moyen à utiliser", preferSelect(p))) : null,
+      h("div", { class: "rowerr", role: "alert" }));
+    box.append(row);
+  });
+  if (!S.participants.length) box.append(h("p", { class: "empty" }, "Personne pour l'instant. Ajoutez au moins deux participants, ou collez une liste « Nom, e-mail ou téléphone »."));
   box.append(h("div", { class: "people-actions" },
     h("button", { class: "btn line", onclick: addPerson }, "Ajouter une personne"),
     h("button", { class: "btn line", onclick: pasteDialog }, "Coller une liste"),
@@ -625,8 +627,23 @@ function renderParticipants(panel) {
   panel.append(box);
   refreshRowErrors();
 }
+/** "Which one to use" only matters with two contacts or more; keep the select in step with the fields. */
+function preferSelect(p) {
+  const have = contactsOf(p);
+  if (p.prefer && !have.includes(p.prefer)) p.prefer = "";
+  const sel = h("select", { class: "in", "aria-label": "Moyen à utiliser", disabled: have.length < 2,
+    onchange: e => { p.prefer = e.target.value; afterEdit(); scheduleValidate(); } },
+    h("option", { value: "" }, have.length < 2 ? "Le seul renseigné" : "Premier de la liste (e-mail d'abord)"),
+    ...CHANNELS.filter(([c]) => have.includes(c)).map(([c, label]) => h("option", { value: c, selected: p.prefer === c }, label)));
+  return sel;
+}
+function syncPrefer(p, row) {
+  const old = row.querySelector(".prefer select"); if (!old) return;
+  old.replaceWith(preferSelect(p));
+  const b = row.querySelector(".more"); if (b) { const have = contactsOf(p), ex = have.filter(c => c !== "email").map(c => CHANNEL_NAME[c]); b.textContent = !have.length ? "Aucun contact" : ex.length ? ex.join(" · ") : "Autres moyens"; b.classList.toggle("warn", !have.length); }
+}
 function addPerson() {
-  S.participants.push({ name: "", email: "", prev: "" });
+  S.participants.push(emptyPerson());
   renderPanel(); afterEdit();
   const rows = document.querySelectorAll(".prow"); rows[rows.length - 1].querySelector("input").focus();
 }
@@ -676,17 +693,20 @@ async function removePerson(i) {
   renderAll(); scheduleValidate();
 }
 function pasteDialog() {
-  const ta = h("textarea", { class: "in", rows: 8, placeholder: "Alice, alice@exemple.org\nBob <bob@exemple.org>" });
+  const ta = h("textarea", { class: "in", rows: 8, placeholder: "Alice, alice@exemple.org\nBob <bob@exemple.org>\nCarol, +33 6 12 34 56 78\nDave" });
   const err = h("div", { class: "dlg-err", role: "alert" });
   openDialog({
     title: "Coller une liste", wide: true,
-    content: h("div", { class: "form-grid" }, h("p", { class: "help" }, "Une personne par ligne : « Nom, e-mail » ou « Nom <e-mail> »."), ta, err),
+    content: h("div", { class: "form-grid" }, h("p", { class: "help" }, "Une personne par ligne : « Nom, e-mail », « Nom <e-mail> », « Nom, téléphone », ou le nom seul (le contact se complète ensuite)."), ta, err),
     actions: [{ label: "Annuler", value: false }, { label: "Ajouter", kind: "primary", value: true, onClick: () => {
       const rows = [], bad = [];
       for (const line of ta.value.split("\n").map(l => l.trim()).filter(Boolean)) {
         const m = line.match(/^(.*?)[\s,;\t]*<?([^\s,;<>]+@[^\s,;<>]+)>?$/);
-        if (!m) { bad.push(line); continue; }
-        rows.push({ name: m[1].trim() || m[2].split("@")[0], email: m[2], prev: "" });
+        if (m) { rows.push(emptyPerson({ name: m[1].trim() || m[2].split("@")[0], email: m[2] })); continue; }
+        const t = line.match(/^(.*?)[\s,;\t]+(\+?[0-9][0-9 .()\/-]{5,})$/);
+        if (t) { rows.push(emptyPerson({ name: t[1].trim(), phone: t[2].trim(), more: true })); continue; }
+        if (!/[,;<>@]/.test(line)) { rows.push(emptyPerson({ name: line })); continue; }
+        bad.push(line);
       }
       if (bad.length) { err.textContent = `Ligne illisible : « ${bad[0]} ».`; return false; }
       if (!rows.length) { err.textContent = "Rien à ajouter."; return false; }
@@ -1015,7 +1035,7 @@ const refreshPreview = debounce(async () => {
   S.preview = res; renderPreview();
 }, 250);
 function renderMessage(panel) {
-  panel.append(pageHead("Message", "Le mail que chaque participant reçoit. Il est enregistré dans message.txt."));
+  panel.append(pageHead("Message", "Le message que chaque participant reçoit. Par e-mail il garde son objet ; par SMS ou Messenger, seul le texte est utilisé. Enregistré dans message.txt, lu au moment de l'envoi (pas du tirage)."));
   const ta = h("textarea", { class: "in", id: "tpl", spellcheck: false, "aria-label": "Modèle du message", oninput: e => { S.template = e.target.value; afterEdit(); refreshPreview(); } }, S.template);
   const insert = v => { const a = ta.selectionStart, b = ta.selectionEnd; ta.setRangeText(v, a, b, "end"); ta.focus(); S.template = ta.value; afterEdit(); refreshPreview(); };
   const helps = { santa: "le participant qui reçoit le mail", recipient: "la personne dont il est le Père Noël", year: "l'année du tirage" };
@@ -1040,7 +1060,7 @@ function renderPreview() {
    Draw
 ================================================================ */
 function renderDraw(panel) {
-  panel.append(pageHead("Tirage", "Lance le vrai tirage : un mail par participant, et le résultat est ajouté à l'historique. Les paires ne s'affichent jamais ici."));
+  panel.append(pageHead("Tirage", "Lance le vrai tirage : un message par participant, et le résultat est ajouté à l'historique. Les paires ne s'affichent jamais ici. L'envoi se fait ensuite dans l'onglet Envoi."));
   const dirty = isDirty();
   if (dirty) panel.append(h("div", { class: "banner" }, h("span", {}, "Le tirage lit les fichiers enregistrés. Enregistrez d'abord vos modifications."), h("button", { class: "btn line", onclick: save }, "Enregistrer")));
   const year = h("input", { class: "in", type: "number", min: 1900, max: 9999, value: String(S.year), disabled: S.draw.busy,
@@ -1062,7 +1082,7 @@ function renderDrawOut() {
   const out = $("#drawOut"); if (!out) return; out.replaceChildren();
   const d = S.draw; if (!d.lines) return;
   out.append(h("div", { class: "console", role: "status" }, d.lines.map(l => h("div", { class: "ln " + l.level }, l.text))));
-  if (d.ok && d.kind === "official") out.append(h("p", { class: "next" }, "Les mails sont dans ", h("code", {}, "secretSantaFiles/"), ". Pour les envoyer : ", h("code", {}, "./ssm.sh -s -d secretSantaFiles")));
+  if (d.ok && d.kind === "official") out.append(h("p", { class: "next" }, h("button", { class: "btn primary", onclick: () => go("send") }, "Passer à l'envoi")));
 }
 async function runDraw(dry, extra = {}) {
   S.draw.busy = true; renderPanel();
@@ -1070,7 +1090,7 @@ async function runDraw(dry, extra = {}) {
   S.draw.busy = false;
   if (res._status === 409) {
     const ok = await confirmDialog({ title: `Remplacer le tirage ${S.year} ?`, label: "Remplacer", danger: true,
-      text: `Un tirage ${S.year} existe déjà dans l'historique. Le nouveau tirage le remplacera, et les mails seront réécrits.` });
+      text: `Un tirage ${S.year} existe déjà dans l'historique. Le nouveau tirage le remplacera, et les messages seront réécrits.` });
     if (ok) return runDraw(dry, { ...extra, overwrite: true });
     renderPanel(); return;
   }
@@ -1085,7 +1105,7 @@ async function runDraw(dry, extra = {}) {
 async function officialDraw() {
   const exists = S.history.some(x => x.year === S.year);
   const ok = await confirmDialog({ title: `Lancer le tirage ${S.year} ?`, label: "Lancer le tirage", danger: false,
-    text: `Un mail est écrit pour chaque participant dans secretSantaFiles/, et le tirage est ajouté à l'historique de ${S.year}${exists ? " en remplaçant celui qui existe" : ""}. Rien n'est envoyé, et les paires ne s'affichent pas.` });
+    text: `Le tirage est ajouté à l'historique de ${S.year}${exists ? " en remplaçant celui qui existe" : ""}. Aucun message n'est écrit ni envoyé ici (c'est l'onglet Envoi), et les paires ne s'affichent pas.` });
   if (ok) runDraw(false, { confirm: true });
 }
 function renderHistory() {
@@ -1097,7 +1117,6 @@ function renderHistory() {
       h("span", { class: "yr" }, String(x.year)),
       h("span", { class: "info" }, h("b", {}, `${x.count} paire${s(x.count)}`), x.imported ? ", importé" : x.generated_at ? ", généré le " + x.generated_at.replace("T", " à ").slice(0, 18) : "",
         relaxed.length ? h("div", { class: "small", style: "color:var(--straw)" }, "Concessions : " + relaxed.join(", ")) : null),
-      S.unsafe && x.year < S.year ? h("button", { class: "btn ghost small", onclick: () => viewDraw(x.year), "aria-label": `Voir les paires du tirage ${x.year}` }, "Voir") : null,
       h("button", { class: "btn ghost danger small", onclick: () => setAside(x.year), "aria-label": `Mettre de côté le tirage ${x.year}` }, "Mettre de côté"));
   });
   out.append(h("div", { class: "hist" }, rows.length ? rows : h("p", { class: "empty" }, "Aucun tirage enregistré.")),
@@ -1133,6 +1152,170 @@ function importDialog() {
       toast(`Tirage ${yr.value} importé` + (res.unknown.length ? ` (${res.unknown.join(", ")} ne fait plus partie des participants)` : "") + ".", "good");
     } }],
   });
+}
+
+/* ================================================================
+   Send: messages are made from the recorded draw, at the moment they go out.
+   E-mail and SMS leave from here; the other channels are handed over by a human.
+================================================================ */
+function takeDeliveries(res) {
+  S.send.items = res.deliveries; S.send.mailReady = res.mail_ready; S.send.smsReady = res.sms_ready;
+  S.send.year = res.year; S.send.reason = res.reason || "";
+}
+async function refreshDeliveries() {
+  const epoch = S.epoch, res = await api("/api/deliveries");
+  if (epoch !== S.epoch) return;
+  if (!res.ok) { S.send.items = []; toast(res.error || "Impossible de lire le tirage.", "error"); }
+  else takeDeliveries(res);
+  if (S.tab === "send") renderPanel();
+}
+/** What each automatic channel needs; anything else is handed over by hand. */
+const AUTO = {
+  email: { path: "/api/send", ready: () => S.send.mailReady, one: "e-mail", many: "e-mails", sentWord: "envoyé" },
+  phone: { path: "/api/send-sms", ready: () => S.send.smsReady, one: "SMS", many: "SMS", sentWord: "envoyé" },
+};
+const isAuto = d => !!AUTO[d.channel] && AUTO[d.channel].ready();
+const sendCounts = () => {
+  const it = S.send.items || [], pend = it.filter(d => d.state === "pending");
+  return { auto: ch => pend.filter(d => d.channel === ch), sent: it.filter(d => d.state === "sent"), hand: pend.filter(d => !isAuto(d)) };
+};
+function renderSend(panel) {
+  panel.append(pageHead("Envoi", "Chaque message est fabriqué à partir du tirage enregistré, avec les contacts d'aujourd'hui. E-mail et SMS partent d'ici ; les autres se remettent à la main : l'outil copie le texte, vous le collez dans la conversation."));
+  if (S.send.items === null) { panel.append(h("p", { class: "muted" }, "Lecture du tirage…")); return; }
+  if (!S.send.items.length) {
+    panel.append(h("div", { class: "empty-state" }, h("p", {}, "Aucun tirage à envoyer."), h("p", { class: "muted" }, S.send.reason || "Lancez un tirage officiel, puis revenez ici."),
+      h("button", { class: "btn line", onclick: () => go("draw") }, "Aller au tirage")));
+    return;
+  }
+  const c = sendCounts(), all = S.send.items, pend = all.filter(d => d.state === "pending").length;
+  panel.append(h("p", { class: "send-sum" }, h("b", {}, `Tirage ${S.send.year}`), " · ", h("b", {}, plural(pend, "message en attente", "messages en attente")), " · ", plural(c.sent.length, "déjà remis", "déjà remis")));
+  panel.append(h("div", { class: "send-grid" },
+    sendSection("E-mails", all.filter(d => d.channel === "email"), "email", c),
+    sendSection("SMS", all.filter(d => d.channel === "phone"), "phone", c),
+    sendSection("À remettre à la main", all.filter(d => d.channel !== "email" && d.channel !== "phone"), null, c)));
+}
+function sendSection(title, items, ch, c) {
+  const head = h("div", { class: "rsec-head" }, h("h3", {}, title));
+  const acts = h("div", { class: "rsec-actions" });
+  const pending = ch ? c.auto(ch) : [];
+  if (ch === "phone") acts.append(h("button", { class: "btn ghost", onclick: smsSettings }, "Réglages SMS"));
+  if (ch && pending.length && AUTO[ch].ready()) acts.append(S.send.busy
+    ? h("button", { class: "btn line", onclick: () => { S.send.stop = true; renderPanel(); }, disabled: S.send.stop }, S.send.stop ? "Arrêt en cours…" : "Arrêter")
+    : h("button", { class: "btn primary", onclick: () => sendAll(ch) }, pending.length === 1 ? `Envoyer le ${AUTO[ch].one}` : `Envoyer les ${pending.length} ${AUTO[ch].many}`));
+  if (acts.childNodes.length) head.append(acts);
+  const body = [];
+  if (ch === "email" && pending.length && !S.send.mailReady) body.push(h("div", { class: "banner" }, h("span", {}, "msmtp est introuvable sur cet ordinateur : l'envoi d'e-mails est impossible d'ici. Installez-le et configurez ~/.msmtprc, ou passez par un autre moyen de contact.")));
+  if (ch === "phone" && items.length && !S.send.smsReady) body.push(h("div", { class: "banner" }, h("span", {}, "Aucune passerelle SMS n'est réglée : ces messages se remettent à la main. « Réglages SMS » explique comment envoyer depuis votre téléphone avec SMSGate.")));
+  if (!ch && c.hand.length) body.push(h("p", { class: "help send-note" }, "« Copier le message » met le texte dans le presse-papiers sans l'afficher : il révèle la personne tirée."));
+  if (!items.length) body.push(h("p", { class: "empty" }, ch === "email" ? "Personne n'est joint par e-mail." : ch === "phone" ? "Personne n'est joint par téléphone." : "Tout le monde est joint par e-mail ou SMS."));
+  else body.push(h("div", { class: "dlist" }, items.map(d => deliveryRow(d))));
+  return h("section", { class: "rsec" }, head, ...body);
+}
+function stateTag(d) {
+  if (S.send.now === d.name) return h("span", { class: "st busy" }, "Envoi…");
+  if (d.state === "sent") return h("span", { class: "st good" }, d.how === "email" || d.how === "sms" ? "Envoyé" : "Remis");
+  const err = S.send.errors[d.name];
+  return err ? h("span", { class: "st bad", title: err }, "Échec") : h("span", { class: "st idle" }, "À " + (isAuto(d) ? "envoyer" : "remettre"));
+}
+function deliveryRow(d) {
+  const err = S.send.errors[d.name];
+  const where = d.channel === "none" ? "Aucun contact" : `${CHANNEL_NAME[d.channel][0].toUpperCase()}${CHANNEL_NAME[d.channel].slice(1)} : ${d.contact}`;
+  const actions = [];
+  if (d.state === "pending") {
+    const auto = isAuto(d);
+    if (auto) actions.push(h("button", { class: "btn line small", disabled: S.send.busy, onclick: () => sendOne(d) }, err ? "Réessayer" : "Envoyer"));
+    actions.push(h("button", { class: "btn line small", onclick: () => copyMessage(d) }, "Copier le message"));
+    if (!auto) {
+      const link = contactLink(d); if (link) actions.push(h("a", { class: "btn ghost small", href: link, target: "_blank", rel: "noopener noreferrer" }, d.channel === "phone" ? "Ouvrir SMS" : "Ouvrir Messenger"));
+      if (d.contact && d.channel !== "other") actions.push(h("button", { class: "btn ghost small", onclick: () => copyText(d.contact, `${d.channel === "phone" ? "Numéro" : "Contact"} de ${d.name} copié.`) }, d.channel === "phone" ? "Copier le numéro" : "Copier le contact"));
+    }
+    actions.push(h("button", { class: "btn ghost small", onclick: () => markSent(d) }, "Marquer comme remis"));
+  }
+  return h("div", { class: "drow" },
+    h("div", { class: "who" }, h("b", {}, d.name), h("span", {}, where), err ? h("span", { class: "dlg-err on" }, err) : null),
+    stateTag(d), h("div", { class: "acts" }, actions));
+}
+/** A link that opens the right app, only for contacts that clearly are what they say. */
+function contactLink(d) {
+  if (d.channel === "phone") { const n = d.contact.replace(/[^0-9+]/g, ""); return n ? "sms:" + n : null; }
+  if (d.channel === "messenger") {
+    if (/^https:\/\//i.test(d.contact)) return d.contact;
+    if (/^[A-Za-z0-9.]{3,}$/.test(d.contact)) return "https://m.me/" + d.contact;
+  }
+  return null;
+}
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg, "good"); return true; }
+  catch { toast("Le navigateur a refusé la copie.", "error"); return false; }
+}
+async function copyMessage(d) {
+  const res = await api("/api/deliveries/message", { name: d.name, year: S.send.year });
+  if (!res.ok) { toast(res.error, "error"); await refreshDeliveries(); return; }
+  try { await navigator.clipboard.writeText(res.text); toast(`Message de ${d.name} copié : collez-le dans la conversation.`, "good"); }
+  catch {
+    const shown = await confirmDialog({ title: "Copie refusée par le navigateur", label: "Afficher le message",
+      text: `Le message pour ${d.name} révèle la personne tirée. L'afficher pour le copier à la main ?` });
+    if (shown) openDialog({ title: `Message pour ${d.name}`, wide: true,
+      content: h("textarea", { class: "in", readonly: true, rows: 8, value: res.text, onfocus: e => e.target.select() }), actions: [{ label: "Fermer", kind: "primary", value: true }] });
+  }
+}
+async function markSent(d) {
+  const res = await api("/api/deliveries/mark", { name: d.name, year: S.send.year });
+  if (!res.ok) { toast(res.error, "error"); return refreshDeliveries(); }
+  takeDeliveries(res); toast(`Message de ${d.name} marqué comme remis.`); renderPanel();
+}
+async function sendOne(d) {
+  const name = d.name;
+  S.send.now = name; delete S.send.errors[name]; renderPanel();
+  const epoch = S.epoch, res = await api(AUTO[d.channel].path, { name, year: S.send.year });
+  if (epoch !== S.epoch) return false;
+  S.send.now = null;
+  if (res.ok) { takeDeliveries(res); return true; }
+  S.send.errors[name] = res.error || "Échec de l'envoi.";
+  if (res._status === 404 || /déjà reçu/.test(S.send.errors[name])) { delete S.send.errors[name]; await refreshDeliveries(); }
+  else renderPanel();
+  return false;
+}
+async function sendAll(ch) {
+  const todo = sendCounts().auto(ch), kind = AUTO[ch];
+  const ok = await confirmDialog({ title: `Envoyer ${plural(todo.length, kind.one, kind.many)} ?`, label: "Envoyer",
+    text: ch === "phone" ? "Chaque personne reçoit son message par SMS, depuis le téléphone réglé. Un message envoyé est noté dans delivery/ : relancer l'envoi ne le renverra pas, et un échec peut être réessayé."
+                         : "Chaque personne reçoit son message. Un e-mail envoyé est noté dans delivery/ : relancer l'envoi ne le renverra pas, et un échec peut être réessayé." });
+  if (!ok) return;
+  const epoch = S.epoch; S.send.busy = true; S.send.stop = false; let sent = 0, failed = 0;
+  for (const d of todo) {
+    if (S.send.stop || epoch !== S.epoch) break;
+    if (await sendOne(d)) sent++; else failed++;
+  }
+  if (epoch !== S.epoch) return;
+  const stopped = S.send.stop; S.send.busy = false; S.send.stop = false; S.send.now = null; renderAll();
+  toast(`${plural(sent, kind.one + " envoyé", kind.many + " envoyés")}` + (failed ? `, ${plural(failed, "échec", "échecs")} (survolez « Échec » ou lisez le détail dans la liste)` : "") + (stopped ? ". Envoi arrêté." : "."), failed ? "error" : "good");
+}
+/** Settings of the SMSGate phone. Shared by every set: it is the phone of the person running the tool. */
+async function smsSettings() {
+  const cur = await api("/api/sms");
+  if (!cur.ok) return toast(cur.error || "Impossible de lire les réglages SMS.", "error");
+  const f = (label, props, hint) => h("label", { class: "field" }, label, h("input", { class: "in", autocomplete: "off", spellcheck: false, ...props }), hint ? h("span", { class: "help" }, hint) : null);
+  const url = f("Adresse du téléphone", { value: cur.url, placeholder: "http://192.168.1.42:8080" }, "Affichée dans l'appli SMSGate, serveur local activé. Le téléphone et cet ordinateur doivent être sur le même réseau.");
+  const user = f("Identifiant", { value: cur.username });
+  const pass = f("Mot de passe", { type: "password", value: "", placeholder: cur.has_password ? "(inchangé)" : "" });
+  const cc = f("Indicatif pays", { value: cur.country_code, placeholder: "+33" }, "Pour transformer 06 12 34 56 78 en +33 6 12 34 56 78. Vide : les numéros sont envoyés tels quels.");
+  const err = h("div", { class: "dlg-err", role: "alert" }), ok = h("div", { class: "help", role: "status" });
+  const form = () => ({ url: url.querySelector("input").value, username: user.querySelector("input").value, password: pass.querySelector("input").value, country_code: cc.querySelector("input").value });
+  await openDialog({
+    title: "Réglages SMS (SMSGate)", wide: true,
+    content: h("div", { class: "form-grid" },
+      h("p", { class: "help" }, "L'appli libre SMSGate (Android) envoie les SMS avec la carte SIM du téléphone, ici sous le contrôle de cet ordinateur. Le texte du message, qui nomme la personne tirée, circule en clair entre cet ordinateur et le téléphone : à faire sur un réseau de confiance. Laisser tout vide efface les réglages."),
+      url, user, pass, cc, err, ok),
+    actions: [
+      { label: "Annuler", value: false },
+      { label: "Tester", onClick: async () => { err.textContent = ""; ok.textContent = "Test…"; const r = await api("/api/sms/test", form()); ok.textContent = r.ok ? "Le téléphone répond." : ""; if (!r.ok) err.textContent = r.error; return false; } },
+      { label: "Enregistrer", kind: "primary", value: true, onClick: async () => {
+        const r = await api("/api/sms/save", form());
+        if (!r.ok) { ok.textContent = ""; err.textContent = r.error; return false; }
+      } }],
+  });
+  await refreshDeliveries();
 }
 
 /* ================================================================
@@ -1173,6 +1356,7 @@ async function switchSet(id) {
   if (id === S.setId) return true;
   if (S.sim.running) S.sim.stop = true;
   if (S.draw.busy) { toast("Un tirage est en cours : attendez la fin avant de changer d'ensemble.", "error"); return false; }
+  if (S.send.busy) { toast("Un envoi est en cours : attendez la fin, ou arrêtez-le, avant de changer d'ensemble.", "error"); return false; }
   if (S.setId && isDirty()) {
     const choice = await openDialog({
       title: "Modifications non enregistrées",
@@ -1185,6 +1369,7 @@ async function switchSet(id) {
   S.setId = id; S.epoch++; storeSet(id);
   S.sim = { running: false, stop: false, total: S.sim.total, agg: null, error: null };
   S.draw = { busy: false, lines: null, kind: null, ok: null };
+  S.send = { busy: false, stop: false, items: null, mailReady: true, errors: {}, now: null };
   history.replaceState(null, "", location.pathname);
   await load();
   return true;
@@ -1192,7 +1377,7 @@ async function switchSet(id) {
 
 /* ---------- switcher in the header ---------- */
 let menuEl = null, switcherSig = "";
-function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; document.querySelectorAll(".setbtn, .optbtn").forEach(b => b.setAttribute("aria-expanded", "false")); } }
+function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; document.querySelectorAll(".setbtn").forEach(b => b.setAttribute("aria-expanded", "false")); } }
 function renderSetSwitcher() {
   const wrap = $("#setwrap"); if (!wrap) return;
   const cur = curSet(), sig = JSON.stringify([S.setId, cur && cur.name, cur && cur.path]);
@@ -1223,7 +1408,7 @@ function toggleMenu() {
     else if (e.key === "Escape") { e.stopPropagation(); closeMenu(); btn.focus(); }
   });
 }
-document.addEventListener("click", e => { if (menuEl && !e.target.closest("#setwrap, #optwrap")) closeMenu(); });
+document.addEventListener("click", e => { if (menuEl && !e.target.closest("#setwrap")) closeMenu(); });
 
 /* ---------- create / copy ---------- */
 async function newSetDialog({ from = null, suggest = "" } = {}) {

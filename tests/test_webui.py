@@ -109,7 +109,8 @@ class Participants(ApiCase):
         good = [{"name": n, "email": f"{n.lower()}@x.org"} for n in NAMES[:3]]
         cases = {"duplicate": good + [good[0]], "bad email": [{"name": "A", "email": "nope"}, good[1]],
                  "slash": [{"name": "A/B", "email": "a@x.org"}, good[1]], "dotfile": [{"name": ".x", "email": "a@x.org"}, good[1]],
-                 "single": [good[0]], "no email": [{"name": "A"}, good[1]], "bad id": [{"id": "x y!", "name": "A", "email": "a@x.org"}, good[1]]}
+                 "single": [good[0]], "bad phone": [{"name": "A", "phone": "12"}, good[1]], "prefers nothing": [{"name": "A", "email": "a@x.org", "prefer": "phone"}, good[1]],
+                 "option-like email": [{"name": "A", "email": "-oQ@x.org"}, good[1]], "bad id": [{"id": "x y!", "name": "A", "email": "a@x.org"}, good[1]]}
         for label, people in cases.items():
             with self.subTest(label):
                 self.assertEqual(self.post("/api/save", {"participants": people})[0], 400)
@@ -188,25 +189,140 @@ class History(ApiCase):
         self.assertEqual(self.post("/api/history/delete", {"year": 1999})[0], 404)
 
 
-    def test_read_needs_unsafe_and_a_past_year(self):
-        people = self.save_people()["participants"]
-        self.post("/api/history/import", {"year": 2025, "text": self.TXT})
-        self.assertEqual(self.post("/api/history/read", {"year": 2025})[0], 403)                  # not opted in
-        self.assertEqual(self.post("/api/history/read", {"year": 2025, "unsafe": "yes"})[0], 403)  # must be literally true
-        this_year = __import__("datetime").date.today().year
-        self.post("/api/history/import", {"year": this_year, "text": self.TXT})
-        st, r = self.post("/api/history/read", {"year": this_year, "unsafe": True})
-        self.assertEqual(st, 403)                                                                  # current draw stays secret
-        self.assertNotIn("Alice", json.dumps(r))
-        st, r = self.post("/api/history/read", {"year": 2025, "unsafe": True})
+class Delivery(ApiCase):
+    def setUp(self):
+        super().setUp()
+        import os
+        from test_sender import fake_msmtp
+        self.bin = Path(tempfile.mkdtemp(dir=self.root))
+        self.log = self.bin / "log"
+        for key, val in (("SANTA_MSMTP", str(fake_msmtp(self.bin))), ("MSMTP_LOG", str(self.log)), ("FAIL_FOR", "")):
+            os.environ[key] = val
+            self.addCleanup(os.environ.pop, key, None)
+        people = [{"name": "Alice", "email": "alice@x.org"}, {"name": "Bob", "phone": "+33 6 00 00 00 02"},
+                  {"name": "Carol", "messenger": "carol.m"}, {"name": "Dave", "email": "dave@x.org"}, {"name": "Eve"}]
+        self.assertEqual(self.post("/api/save", {"participants": people})[0], 200)
+
+    def draw(self):
+        st, r = self.post("/api/draw", {"year": 2026, "confirm": True})
+        self.assertTrue(st == 200 and r["ok"], r)
+        return r
+
+    def test_nothing_before_a_draw_and_no_pair_ever_in_the_listing(self):
+        r = self.get("/api/deliveries")[1]
+        self.assertEqual((r["ok"], r["deliveries"], r["mail_ready"]), (True, [], True))
+        self.assertIn("reason", r)
+        draw = self.draw()
+        self.assertTrue(any("Eve" in l["text"] and l["level"] == "warn" for l in draw["lines"]))     # no contact: warned
+        listing = self.get("/api/deliveries")[1]
+        self.assertEqual([(d["name"], d["channel"], d["state"]) for d in listing["deliveries"]],
+                         [("Alice", "email", "pending"), ("Bob", "phone", "pending"), ("Carol", "messenger", "pending"),
+                          ("Dave", "email", "pending"), ("Eve", "none", "pending")])
+        self.assertNotIn("Père Noël", json.dumps(listing))                                           # never the content
+
+    def test_send_one_and_failures(self):
+        import os
+        self.draw()
+        st, r = self.post("/api/send", {"name": "Alice"})
         self.assertEqual(st, 200)
-        self.assertEqual(r["pairs"][0], {"from": "Alice", "to": "Bob"})
-        self.assertEqual(len(r["pairs"]), 6)
-        self.assertEqual(self.post("/api/history/read", {"year": 1999, "unsafe": True})[0], 404)
-        renamed = [{**p, "name": "Alicia"} if p["name"] == "Alice" else p for p in people]
-        self.post("/api/save", {"participants": renamed})
-        r = self.post("/api/history/read", {"year": 2025, "unsafe": True})[1]
-        self.assertEqual(r["pairs"][0]["from"], "Alicia")                                          # follows the id
+        self.assertEqual({d["name"]: d["state"] for d in r["deliveries"]}["Alice"], "sent")
+        self.assertIn("TO alice@x.org", self.log.read_text(encoding="utf-8"))
+        self.assertEqual(self.post("/api/send", {"name": "Alice"})[0], 422)                          # not twice
+        os.environ["FAIL_FOR"] = "dave@x.org"
+        st, r = self.post("/api/send", {"name": "Dave"})
+        self.assertTrue(st == 422 and "550 refused" in r["error"], r)
+        self.assertEqual({d["name"]: d["state"] for d in self.get("/api/deliveries")[1]["deliveries"]}["Dave"], "pending")
+        self.assertEqual(self.post("/api/send", {})[0], 400)
+        self.assertEqual(self.post("/api/send", {"name": "Bob"})[0], 422)                            # Bob has no address
+
+    def test_missing_msmtp_is_reported(self):
+        import os
+        os.environ["SANTA_MSMTP"] = str(self.bin / "absent")
+        self.draw()
+        self.assertFalse(self.get("/api/deliveries")[1]["mail_ready"])
+        st, r = self.post("/api/send", {"name": "Alice"})
+        self.assertTrue(st == 422 and "introuvable" in r["error"])
+
+    def test_manual_message_then_mark(self):
+        self.draw()
+        st, r = self.post("/api/deliveries/message", {"name": "Bob"})
+        self.assertEqual((st, r["channel"], r["contact"]), (200, "phone", "+33 6 00 00 00 02"))
+        self.assertIn("Père Noël secret", r["text"])
+        self.assertNotIn("Subject", r["text"])
+        st, r = self.post("/api/deliveries/mark", {"name": "Bob"})
+        self.assertEqual({d["name"]: d["state"] for d in r["deliveries"]}["Bob"], "sent")
+        self.assertEqual(self.post("/api/deliveries/mark", {"name": "Bob"})[0], 404)
+        self.assertEqual(self.post("/api/deliveries/message", {"name": "../x"})[0], 404)
+
+    def test_a_contact_added_after_the_draw_is_used(self):
+        self.draw()
+        state = self.get("/api/state")[1]
+        people = [{**p, "email": "eve@x.org"} if p["name"] == "Eve" else p for p in state["participants"]]
+        self.assertEqual(self.post("/api/save", {"participants": people})[0], 200)
+        by_name = {d["name"]: d for d in self.get("/api/deliveries")[1]["deliveries"]}
+        self.assertEqual(by_name["Eve"]["channel"], "email")
+        self.assertEqual(self.post("/api/send", {"name": "Eve"})[0], 200)
+
+    def test_contacts_survive_a_save_round_trip(self):
+        state = self.get("/api/state")[1]
+        bob = next(p for p in state["participants"] if p["name"] == "Bob")
+        self.assertEqual(bob["phone"], "+33 6 00 00 00 02")
+        self.assertNotIn("email", bob)                                                               # empty ones are not written
+
+
+class Sms(ApiCase):
+    def setUp(self):
+        super().setUp()
+        from fake_smsgate import FakeSmsGate
+        self.phone = FakeSmsGate()
+        self.addCleanup(self.phone.close)
+        self.addCleanup(lambda: (self.root / "sms.json").unlink(missing_ok=True))
+        people = [{"name": "Alice", "email": "alice@x.org"}, {"name": "Bob", "phone": "06 00 00 00 02"},
+                  {"name": "Carol", "phone": "+33 6 00 00 00 03"}]
+        self.assertEqual(self.post("/api/save", {"participants": people})[0], 200)
+
+    def settings(self, **kw):
+        return {"url": self.phone.url, "username": "user", "password": "secret", "country_code": "+33", **kw}
+
+    def test_settings_roundtrip_never_returns_the_password(self):
+        self.assertEqual(self.req("GET", "/api/sms")[1]["has_password"], False)
+        st, r = self.req("POST", "/api/sms/save", self.settings())
+        self.assertEqual((st, r["has_password"], r["country_code"]), (200, True, "+33"))
+        self.assertNotIn("secret", json.dumps(self.req("GET", "/api/sms")[1]))
+        # an empty password on the form keeps the saved one
+        st, r = self.req("POST", "/api/sms/save", self.settings(password="", username="other"))
+        self.assertTrue(r["has_password"] and r["username"] == "other")
+        mode = (self.root / "sms.json").stat().st_mode & 0o777
+        self.assertEqual(mode & 0o077, 0)                                  # not readable by others
+        st, r = self.req("POST", "/api/sms/save", {"url": "", "username": "", "password": "", "country_code": ""})
+        self.assertEqual((st, r["has_password"], r["url"]), (200, False, ""))   # an empty form clears it
+        self.assertFalse((self.root / "sms.json").exists())
+        self.req("POST", "/api/sms/save", self.settings())
+        self.assertEqual(self.req("POST", "/api/sms/save", self.settings(url="ftp://x"))[0], 422)
+
+    def test_connection_test(self):
+        self.assertEqual(self.req("POST", "/api/sms/test", self.settings())[0], 200)
+        st, r = self.req("POST", "/api/sms/test", self.settings(password="wrong"))
+        self.assertTrue(st == 422 and "refuse" in r["error"])
+
+    def test_send_sms_end_to_end(self):
+        draw = self.post("/api/draw", {"year": 2026, "confirm": True})[1]
+        self.assertTrue(draw["ok"])
+        self.assertFalse(self.get("/api/deliveries")[1]["sms_ready"])
+        self.assertEqual(self.post("/api/send-sms", {"name": "Bob"})[0], 422)           # not configured
+        self.req("POST", "/api/sms/save", self.settings())
+        self.assertTrue(self.get("/api/deliveries")[1]["sms_ready"])
+        st, r = self.post("/api/send-sms", {"name": "Bob"})
+        self.assertEqual(st, 200)
+        self.assertEqual({d["name"]: d["state"] for d in r["deliveries"]}["Bob"], "sent")
+        self.assertEqual(self.phone.received[0]["numbers"], ["+33600000002"])
+        self.assertNotIn("Subject", self.phone.received[0]["text"])
+        self.assertEqual(self.post("/api/send-sms", {"name": "Alice"})[0], 422)         # no number
+        self.phone.final_state = "Failed"
+        st, r = self.post("/api/send-sms", {"name": "Carol"})
+        self.assertTrue(st == 422 and "No service" in r["error"])
+        self.assertEqual({d["name"]: d["state"] for d in self.get("/api/deliveries")[1]["deliveries"]}["Carol"], "pending")
+
 
 class LegacyUpgrade(ApiCase):
     def test_opening_an_old_set_adds_ids_and_converts_history_once(self):
@@ -271,8 +387,9 @@ class Draw(ApiCase):
         self.assertFalse((self.dir / "secretSantaFiles").exists())
         self.assertEqual(self.post("/api/draw", {"year": 2026})[0], 400)
         st, r = self.post("/api/draw", {"year": 2026, "confirm": True})
-        self.assertTrue(r["ok"] and any("Tirage généré" in l["text"] for l in r["lines"]), r)
-        self.assertEqual(len(list((self.dir / "secretSantaFiles").glob("*.mail"))), 6)
+        self.assertTrue(r["ok"] and any("Tirage enregistré" in l["text"] for l in r["lines"]), r)
+        self.assertFalse((self.dir / "secretSantaFiles").exists())          # the draw makes no message
+        self.assertEqual(sorted(p.name for p in (self.dir / "history").iterdir()), ["2026.json"])
         data = json.loads((self.dir / "history/2026.json").read_text())
         names = data["people"]
         pairs = {(names[a["from"]], names[a["to"]]) for a in data["assignments"]}

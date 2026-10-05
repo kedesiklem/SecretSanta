@@ -34,11 +34,20 @@ reads ``sys.argv`` or calls ``sys.exit``::
 
 Bad input raises ``SantaError`` (a message meant for the user); "no valid draw"
 is a normal result (``feasible == False``), not an exception. The building
-blocks (``build_plan``, ``solve``, ``Template``, ``build_mail``) are public too.
+blocks (``build_plan``, ``solve``) are public too.
+
+What this file is *not*
+-----------------------
+It produces the draw, nothing else: ``history/<year>.json`` is its only output
+(who gives to whom, by id). Turning that draw into messages and delivering them
+(templates, e-mail, SMS, contacts) is ``sender.py``'s job, which reads the draw
+from there. This file never writes a mail, and does not know how anybody is
+reached: it keeps the extra fields of ``participants.json`` untouched, and that is all.
 
 Identifiers
 -----------
-A participant is ``{"id", "name", "email"}``. The ``name`` is what humans read
+A participant is ``{"id", "name"}``, plus any other fields (contacts, for
+``sender.py``), which are kept as they are. The ``name`` is what humans read
 and what ``rules.json`` refers to (a typo there is a loud error). The ``id`` is
 a random token that never changes, and it is what ``history/`` stores: a
 history that silently forgot people after a rename would be a *quiet* failure.
@@ -86,15 +95,6 @@ the minimum possible number of violations at each level, with higher
 priorities never sacrificed for lower ones. Finally, the remaining freedom is
 spent on a random objective, so the draw is unpredictable.
 
-Message template
-----------------
-The text of the mails lives in ``message.txt``, not in the code: first line
-``Subject: ...``, one blank line, then the body. ``{santa}``, ``{recipient}``
-and ``{year}`` are replaced for each participant (``{{`` / ``}}`` for a literal
-brace). The template is parsed and rendered once with dummy values *before*
-the solver runs, so a typo fails immediately instead of after the draw, and
-``--dry-run`` shows that preview. Without a file, a built-in default is used.
-
 Design notes
 ------------
 * Unknown names in a rule are a hard error, not a warning: a silently ignored
@@ -122,7 +122,6 @@ import sys
 import tempfile
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from email.message import EmailMessage
 from itertools import permutations
 from pathlib import Path
 from typing import Optional
@@ -176,8 +175,7 @@ RELAX_MODES = ("pair", "rule")
 HISTORY_VERSION = 2
 
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+$")        # lenient on purpose: local addresses are fine
-BAD_NAME_RE = re.compile(r"[\\/\x00-\x1f]")        # names become file names (<name>.mail)
+BAD_NAME_RE = re.compile(r"[\\/\x00-\x1f]")        # a name must be safe wherever it ends up: a file name, a log line
 
 
 @dataclass(eq=False)  # eq=False: entries are compared by identity, not content
@@ -197,51 +195,55 @@ class Entry:
 
 
 class Person:
-    """A participant: a stable ``id`` (None until assigned), a unique display name, a mail address."""
+    """A participant: a stable ``id`` (None until assigned) and a unique display name.
 
-    def __init__(self, name, email, id=None):
+    Every other key of the participant's JSON object is kept in ``extra`` and
+    written back as it was: how somebody is reached is not this file's business
+    (see ``sender.py``), but it must survive a save.
+    """
+
+    def __init__(self, name, id=None, extra=None):
         self.name = name
-        self.email = email
         self.id = id
+        self.extra = dict(extra or {})
 
     def to_dict(self):
         out = {"id": self.id} if self.id else {}
-        return {**out, "name": self.name, "email": self.email}
+        out["name"] = self.name
+        out.update(self.extra)
+        return out
 
     @classmethod
     def from_dict(cls, data, position=None):
         where = f"Participant {position}" if position else "Participant"
         if not isinstance(data, dict):
-            raise SantaError(f"{where} : format inattendu (un objet avec « name » et « email » est attendu).")
-        try:
-            name, email = data["name"], data["email"]
-        except KeyError as e:
-            raise SantaError(f"{where} : le champ {e.args[0]} est manquant.") from None
-        if not isinstance(name, str) or not isinstance(email, str):
-            raise SantaError(f"{where} : « name » et « email » doivent être du texte.")
-        pid = data.get("id")
+            raise SantaError(f"{where} : format inattendu (un objet avec au moins « name » est attendu).")
+        if "name" not in data:
+            raise SantaError(f"{where} : le champ name est manquant.")
+        name, pid = data["name"], data.get("id")
+        if not isinstance(name, str):
+            raise SantaError(f"{where} : « name » doit être du texte.")
         if pid is not None and not isinstance(pid, str):
             raise SantaError(f"{where} : « id » doit être du texte.")
-        return cls(name=name.strip(), email=email.strip(), id=pid or None)
+        return cls(name=name.strip(), id=pid or None,
+                   extra={k: v for k, v in data.items() if k not in ("id", "name")})
 
     def __repr__(self):
-        return f"Person(name='{self.name}', email='{self.email}', id={self.id!r})"
+        return f"Person(name='{self.name}', id={self.id!r})"
 
 
 def check_people(people):
     """Validate a participant list: the checks the draw relies on.
 
-    Names identify people in the rules *and* become file names (``<name>.mail``),
-    so they must be unique and safe; ids, when present, must be unique too.
+    Names identify people in the rules, so they must be unique and safe; ids,
+    when present, must be unique too.
     """
     for n, p in enumerate(people, start=1):
         if not p.name:
             raise SantaError(f"Participant {n} : le nom est vide.")
         if BAD_NAME_RE.search(p.name) or p.name.startswith("."):
             raise SantaError(f"« {p.name} » : le nom ne peut pas contenir de « / », de « \\ » "
-                             "ni commencer par un point (il sert de nom de fichier).")
-        if not EMAIL_RE.match(p.email):
-            raise SantaError(f"{p.name} : adresse e-mail invalide.")
+                             "ni commencer par un point.")
         if p.id is not None and not ID_RE.match(p.id):
             raise SantaError(f"{p.name} : identifiant invalide « {p.id} » "
                              "(lettres, chiffres, « - » et « _ », 40 caractères au plus).")
@@ -698,114 +700,6 @@ def solve(n, entries, single_cycle=False, time_limit=20.0, seed=None):
 
 
 # --------------------------------------------------------------------------
-# Message template
-# --------------------------------------------------------------------------
-
-TEMPLATE_VARIABLES = ("santa", "recipient", "year")
-DEFAULT_TEMPLATE_PATH = "message.txt"
-DEFAULT_TEMPLATE = (
-    "Subject: Père Noël Secret\n"
-    "\n"
-    "Tu es le Père Noël secret de {recipient} !\n"
-)
-
-# Fictional stand-ins used whenever a message is rendered for a preview or a
-# validation pass. They are storybook characters on purpose: nobody is called
-# that, so a preview can never be mistaken for a real mail.
-PREVIEW_SANTA = "Mère Noël"
-PREVIEW_RECIPIENT = "Rudolph"
-
-
-class Template:
-    """The mail text: a subject and a body, both may contain ``{variables}``.
-
-    Build one with ``Template.parse`` (from text) or ``Template.load`` (from a
-    file); both validate it by rendering it once with the preview characters,
-    so every mistake surfaces *now*, before the solver runs.
-    """
-
-    def __init__(self, subject, body, source="message"):
-        self.subject, self.body, self.source = subject, body, source
-
-    @classmethod
-    def parse(cls, text, source="message"):
-        """Format: first line ``Subject: ...``, then one blank line, then the body.
-
-        Header-like lines (``To:``, ``From:``...) right after the subject are
-        refused instead of silently becoming part of the body: the recipient is
-        set by the program, and a wrong header here would be easy to miss.
-        """
-        lines = text.replace("\r\n", "\n").split("\n")   # tolerate Windows editors
-        m = re.match(r"(?i)\s*subject:\s*(\S.*)$", lines[0])
-        if not m:
-            raise SantaError(f"{source} : la première ligne doit être « Subject: … ».")
-        if len(lines) > 1 and lines[1].strip():
-            raise SantaError(f"{source} : la ligne 2 doit être vide (le corps du message vient après).")
-        body = "\n".join(lines[2:]).strip("\n")
-        if not body.strip():
-            raise SantaError(f"{source} : le corps du message est vide.")
-        template = cls(m.group(1).strip(), body + "\n", source)
-        template.preview(2000)          # validate now: unknown variable, stray brace...
-        return template
-
-    @classmethod
-    def load(cls, path=None, base="."):
-        """Read a template file; return ``(template, notices)``.
-
-        ``path`` is None when no file was asked for explicitly: ``message.txt``
-        is used if present, else the built-in text. An explicit path that does
-        not exist is an error.
-        """
-        candidate = Path(base) / (path or DEFAULT_TEMPLATE_PATH)
-        if candidate.is_file():
-            # utf-8-sig drops a BOM that some editors add
-            return cls.parse(candidate.read_text(encoding="utf-8-sig"), str(path or DEFAULT_TEMPLATE_PATH)), []
-        if path:
-            raise SantaError(f"Modèle de message introuvable : {path}")
-        return (cls.parse(DEFAULT_TEMPLATE, "message par défaut"),
-                [Notice("info", f"{DEFAULT_TEMPLATE_PATH} introuvable : message par défaut.")])
-
-    def render(self, **values):
-        """Fill in the variables; turn any template mistake into a clear error.
-
-        ``format_map`` is strict on purpose: an unknown ``{variable}`` raises
-        instead of leaking into the mail as literal text.
-        """
-        try:
-            return self.subject.format_map(values).strip(), self.body.format_map(values)
-        except KeyError as e:
-            names = ", ".join("{" + v + "}" for v in TEMPLATE_VARIABLES)
-            raise SantaError(f"{self.source} : variable inconnue {{{e.args[0]}}}. Disponibles : {names}.") from None
-        except (ValueError, IndexError, AttributeError) as e:
-            raise SantaError(f"{self.source} : modèle invalide ({e}). "
-                             f"Pour une accolade littérale, doublez-la : {{{{ ou }}}}.") from None
-
-    def preview(self, year):
-        """``(subject, body)`` rendered with the preview characters."""
-        return self.render(santa=PREVIEW_SANTA, recipient=PREVIEW_RECIPIENT, year=year)
-
-
-# --------------------------------------------------------------------------
-# Mail files
-# --------------------------------------------------------------------------
-
-def build_mail(santa, recipient, template, year):
-    """Build one ``.mail`` file as bytes.
-
-    Layout: first line = bare recipient address (used by ssm.sh as the
-    ``msmtp`` argument), then a complete RFC 5322 message. ``EmailMessage``
-    takes care of the blank line between headers and body and of UTF-8
-    encoding.
-    """
-    subject, body = template.render(santa=santa.name, recipient=recipient.name, year=year)
-    msg = EmailMessage()
-    msg["To"] = santa.email
-    msg["Subject"] = subject
-    msg.set_content(body, charset="utf-8")
-    return santa.email.encode() + b"\n" + msg.as_bytes()
-
-
-# --------------------------------------------------------------------------
 # Project: one folder = one participant list with its rules, message and history
 # --------------------------------------------------------------------------
 
@@ -814,17 +708,15 @@ class DrawResult:
     """What ``Project.draw`` reports. Never contains who draws whom.
 
     ``feasible`` is False when no draw satisfies the strict rules; that is a
-    normal outcome, explained in ``notices``. ``preview`` is
-    ``(subject, body, source)`` of the message with the preview characters,
-    only set for a dry run.
+    normal outcome, explained in ``notices``. ``history_file`` is where the draw
+    was recorded (None for a dry run or when there is none): that file *is* the
+    draw, and what ``sender.py`` reads.
     """
     year: int
     dry_run: bool
     feasible: bool
     notices: list
     violations: list = field(default_factory=list)
-    preview: Optional[tuple] = None
-    mails: list = field(default_factory=list)       # names of the people whose mail was written
     history_file: Optional[str] = None
 
 
@@ -834,15 +726,12 @@ class Project:
     ``base`` is what makes several lists possible side by side (one folder
     each) without ever changing the current directory. The other arguments are
     names relative to ``base`` (or absolute paths) and default to the standard
-    layout. ``template=None`` means ``message.txt`` if it exists, else the
-    built-in message.
+    layout.
     """
 
-    def __init__(self, base=".", *, participants="participants.json", rules="rules.json",
-                 history_dir="history", output_dir="secretSantaFiles", template=None):
+    def __init__(self, base=".", *, participants="participants.json", rules="rules.json", history_dir="history"):
         self.base = Path(base)
-        self.participants_file, self.rules_file = participants, rules
-        self.history_dir, self.output_dir, self.template = history_dir, output_dir, template
+        self.participants_file, self.rules_file, self.history_dir = participants, rules, history_dir
 
     # -- paths -----------------------------------------------------------
 
@@ -861,13 +750,6 @@ class Project:
     def history_path(self):
         return self.path(self.history_dir)
 
-    @property
-    def output_path(self):
-        return self.path(self.output_dir)
-
-    @property
-    def template_path(self):
-        return self.path(self.template or DEFAULT_TEMPLATE_PATH)
 
     # -- reading and writing the inputs ----------------------------------
 
@@ -906,16 +788,15 @@ class Project:
     # -- the draw ----------------------------------------------------------
 
     def draw(self, year, *, dry_run=False, emit_compiled=None, seed=None, time_limit=20.0):
-        """Check the inputs, solve, and (unless ``dry_run``) write mails and history.
+        """Check the inputs, solve, and (unless ``dry_run``) record the draw in ``history/<year>.json``.
 
-        Order matters: the message is validated *first* (a typo must not cost
-        a solver run), every mail is rendered in memory *before* any file is
-        written, and the history goes down *before* the mails, so a mail that
-        exists always belongs to a recorded draw.
+        That file is the only thing written besides the ids it may add to the
+        participants (and the ``.bak`` copies of what it converts). Messages are
+        made from it later, by ``sender.py``.
 
         Raises ``SantaError`` for bad input; "no valid draw" is a result.
         """
-        template, notices = Template.load(self.template, self.base)
+        notices = []
         people = self.load_people()
         plan = self.plan(year, people)
         notices += plan.notices + [Notice("conflict", c) for c in plan.conflicts]
@@ -937,9 +818,7 @@ class Project:
 
         if dry_run:
             notices.append(Notice("ok", "Un tirage valide existe (rien n'a été écrit)."))
-            subject, body = template.preview(year)
-            return DrawResult(year, True, True, notices, solution.violations,
-                              preview=(subject, body, template.source))
+            return DrawResult(year, True, True, notices, solution.violations)
 
         if seed is not None:
             notices.append(Notice("warn", "Tirage reproductible (--seed) : à réserver aux tests, "
@@ -953,22 +832,13 @@ class Project:
             notices.append(Notice("info", "Historique converti aux identifiants : "
                                           f"{', '.join(map(str, converted))} (copies .bak conservées)."))
 
-        mails = {p.name: build_mail(p, people[solution.assignment[i]], template, year)
-                 for i, p in enumerate(people)}
         history_file = self.history_path / f"{year}.json"
         write_atomic(history_file, dump_json(history_document(year, people, solution.assignment,
                                                               solution.violations)))
-        for name, data in mails.items():
-            write_atomic(self.output_path / f"{name}.mail", data)
-
-        notices.append(Notice("ok", f"Tirage généré : {len(people)} mails dans {self.output_dir}/"))
-        notices.append(Notice("file", f"Historique enregistré dans {self.history_dir}/{year}.json"))
-        stale = sorted(p.stem for p in self.output_path.glob("*.mail") if p.stem not in mails)
-        if stale:
-            notices.append(Notice("warn", f"{len(stale)} mail(s) d'un tirage précédent n'ont pas été remplacés "
-                                          f"({', '.join(stale)}) : ne les envoyez pas, supprimez-les (ssm.sh -c)."))
-        return DrawResult(year, False, True, notices, solution.violations,
-                          mails=list(mails), history_file=str(history_file))
+        notices.append(Notice("ok", f"Tirage enregistré pour {len(people)} participants."))
+        notices.append(Notice("file", f"Historique enregistré dans {self.history_dir}/{year}.json "
+                                      "(c'est le tirage : sender.py en fait des messages)."))
+        return DrawResult(year, False, True, notices, solution.violations, history_file=str(history_file))
 
     # -- history management --------------------------------------------------
 
@@ -993,33 +863,6 @@ class Project:
             except (OSError, ValueError, KeyError, AttributeError, TypeError):
                 out.append({"year": None, "file": p.name, "error": "illisible"})
         return sorted(out, key=lambda h: (h.get("year") is None, h.get("year") or 0))
-
-    def read_history(self, year):
-        """The pairs of one past draw, as names: ``{"year", "pairs": [(giver, receiver)], ...}``.
-
-        This is the one place where the library hands out *who gives to whom*
-        from a stored draw; everything else (``list_history``, the web
-        interface) stays count-only. Callers decide whether showing it is
-        acceptable. Names come from the current participant list when the id
-        is still known (so a renamed person shows under the new name), else
-        from the name recorded in the file. Raises ``SantaError`` if there is
-        no such draw.
-        """
-        for path in self._history_files():
-            data = read_json(path)
-            if isinstance(data, dict) and data.get("year") == year:
-                break
-        else:
-            raise SantaError(f"Aucun tirage enregistré pour {year}.")
-        by_id = {p.id: p.name for p in self.load_people() if p.id}
-        recorded = data.get("people", {}) if data.get("version", 1) >= 2 else {}
-
-        def label(key):
-            return by_id.get(key) or recorded.get(key) or str(key)
-
-        pairs = [(label(a.get("from")), label(a.get("to"))) for a in data.get("assignments", [])]
-        return {"year": year, "pairs": pairs, "generated_at": data.get("generated_at"),
-                "imported": bool(data.get("imported")), "relaxed_rules": data.get("relaxed_rules", [])}
 
     def migrate_history(self):
         """Convert name-based (version 1) history files to ids. Returns the years converted.
@@ -1143,16 +986,6 @@ def print_notices(notices, out=None):
         print(f"{NOTICE_ICONS.get(n.level, '')}{n.text}", file=out or sys.stdout)
 
 
-def print_preview(preview, out=None):
-    subject, body, source = preview
-    p = lambda s: print(s, file=out or sys.stdout)
-    p(f"📧 Aperçu du message ({source}, personnages fictifs) :")
-    p(f"   Subject: {subject}")
-    p("   " + "─" * 40)
-    for line in body.rstrip("\n").split("\n"):
-        p(f"   {line}")
-
-
 def build_parser():
     ap = argparse.ArgumentParser(description="Tirage du Père Noël secret.")
     ap.add_argument("--base-dir", default=".", metavar="DIR",
@@ -1160,17 +993,13 @@ def build_parser():
                          "(default: current folder)")
     ap.add_argument("--participants", default="participants.json")
     ap.add_argument("--rules", default="rules.json")
-    ap.add_argument("--output-dir", default="secretSantaFiles")
     ap.add_argument("--history-dir", default="history")
     ap.add_argument("--year", type=int, default=datetime.date.today().year,
                     help="year recorded in the history file (default: this year)")
     ap.add_argument("--dry-run", action="store_true",
-                    help="only check that a valid draw exists; write no mail, no history, print no pairs")
+                    help="only check that a valid draw exists; write nothing, print no pairs")
     ap.add_argument("--emit-compiled", metavar="FILE",
                     help="also write the compiled entries to FILE (debug; as sensitive as history/)")
-    ap.add_argument("--template", metavar="FILE",
-                    help=f"message template (default: {DEFAULT_TEMPLATE_PATH} if present, "
-                         "else a built-in text)")
     ap.add_argument("--seed", type=int, metavar="N",
                     help="make the draw reproducible (TESTS ONLY: anyone knowing the seed can redo the draw)")
     return ap
@@ -1180,7 +1009,7 @@ def main(argv=None):
     """Command-line entry point; returns the process exit code."""
     args = build_parser().parse_args(argv)
     project = Project(args.base_dir, participants=args.participants, rules=args.rules,
-                      history_dir=args.history_dir, output_dir=args.output_dir, template=args.template)
+                      history_dir=args.history_dir)
     try:
         result = project.draw(args.year, dry_run=args.dry_run, emit_compiled=args.emit_compiled,
                               seed=args.seed)
@@ -1193,8 +1022,6 @@ def main(argv=None):
         print(f"❌ Erreur de fichier : {e}")
         return 1
     print_notices(result.notices)
-    if result.preview:
-        print_preview(result.preview)
     return 0 if result.feasible else 1
 
 

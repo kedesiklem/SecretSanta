@@ -15,13 +15,18 @@ How it plugs in
 ---------------
 * ``Santa.py`` is imported as a library. Validation, simulations and the draw
   itself call the same functions as the command line (``Project.draw``,
-  ``build_plan``, ``solve``, ``Template``), so the page can never disagree with
+  ``build_plan``, ``solve``), so the page can never disagree with
   the program about what a rule means. The official draw is ``Project.draw``,
   the very call ``Santa.py`` makes for ``ssm.sh -g``.
 * Everything is passed around as data: no console output is parsed and no
   process-wide state (current folder, ``sys.argv``) is touched, so the only
   lock left protects against two requests writing the same files at once.
-* Mails are never sent from here: sending stays with ``ssm.sh -s``.
+* Two modules, two jobs. ``Santa.py`` makes the draw and records it in
+  ``history/<year>.json``. ``sender.py`` turns that draw into messages and
+  delivers them (e-mail through ``msmtp``, SMS through an SMSGate phone, or by
+  hand), keeping only a small ``delivery/<year>.json`` of who has received
+  theirs. This page orchestrates both and does neither itself, so the page, the
+  command line and ``ssm.sh`` can be mixed: nothing is sent twice.
 
 Sets
 ----
@@ -61,12 +66,10 @@ Privacy
 The page never displays the pairs of the official draw, nor the pairs stored
 in ``history/``. Simulations use throw-away draws; their matrix shows which
 pairs are *allowed*, which reflects the history rule (past years only).
-
-One opt-in exception: in "unsafe mode" (Options menu, confirmed by the user,
-off again at every page load) the page may show the pairs of a *past* year
-through ``/api/history/read``. The request must carry ``"unsafe": true`` and
-the current calendar year is always refused, so the draw being played stays
-secret.
+The delivery list shows who is waiting for a message, by which channel, never
+what it says. The one exception is the text of a message to hand over by hand
+(SMS, Messenger...): it is fetched on demand and copied to the clipboard, not
+displayed.
 
 Safety net
 ----------
@@ -100,6 +103,13 @@ except ModuleNotFoundError as e:
     if e.name == "Santa":
         sys.exit("❌ Santa.py doit se trouver à côté de webui.py.")
     sys.exit(f"❌ Module manquant : {e.name}. Activez le venv ou lancez : pip install ortools")
+
+try:
+    import sender  # messages and delivery, reads what Santa.py recorded
+except ModuleNotFoundError as e:
+    if e.name == "sender":
+        sys.exit("❌ sender.py doit se trouver à côté de webui.py.")
+    raise
 
 if not hasattr(Santa, "Project"):
     sys.exit("❌ Ce Santa.py est trop ancien : webui.py a besoin de la version avec l'API Project.\n"
@@ -166,6 +176,7 @@ def parse_people(data):
     try:
         people = [Santa.Person.from_dict(item, n) for n, item in enumerate(data, start=1)]
         Santa.check_people(people)
+        sender.check_contacts(people)
     except Santa.SantaError as e:
         raise ApiError(e.message) from None
     return people
@@ -180,15 +191,15 @@ def plan_for(project, people, rules, year):
 
 
 def read_template(project):
-    path = project.template_path
+    path = sender.Sender(project.base).template_path
     if path.is_file():
         return {"text": path.read_text(encoding="utf-8-sig").replace("\r\n", "\n"), "exists": True}
-    return {"text": Santa.DEFAULT_TEMPLATE, "exists": False}
+    return {"text": sender.DEFAULT_TEMPLATE, "exists": False}
 
 
 def check_template(text, year):
     """Parse a template and render it with the preview characters: ``(subject, body)``."""
-    return Santa.Template.parse(text, Santa.DEFAULT_TEMPLATE_PATH).preview(year)
+    return sender.Template.parse(text, sender.DEFAULT_TEMPLATE_PATH).preview(year)
 
 
 def lines_from(notices):
@@ -220,7 +231,7 @@ def api_state(project, _body=None):
         "year": datetime.date.today().year,
         "project_dir": str(project.base),
         "upgraded": upgraded,
-        "defaults": {"priority": Santa.DEFAULT_PRIORITY, "variables": list(Santa.TEMPLATE_VARIABLES)},
+        "defaults": {"priority": Santa.DEFAULT_PRIORITY, "variables": list(sender.TEMPLATE_VARIABLES)},
     }
 
 
@@ -293,8 +304,8 @@ def api_save(project, body):
         saved.append(project.rules_file)
     if new_template is not None:
         text = new_template.replace("\r\n", "\n").rstrip("\n") + "\n"
-        Santa.write_atomic(project.template_path, text, backup=True)
-        saved.append(Santa.DEFAULT_TEMPLATE_PATH)
+        Santa.write_atomic(sender.Sender(project.base).template_path, text, backup=True)
+        saved.append(sender.DEFAULT_TEMPLATE_PATH)
     return {"ok": True, "saved": saved, "state": api_state(project)}
 
 
@@ -352,7 +363,7 @@ def api_template_preview(project, body):
     except Santa.SantaError as e:
         return {"ok": False, "error": e.message}
     return {"ok": True, "subject": subject, "body": text,
-            "santa": Santa.PREVIEW_SANTA, "recipient": Santa.PREVIEW_RECIPIENT}
+            "santa": sender.PREVIEW_SANTA, "recipient": sender.PREVIEW_RECIPIENT}
 
 
 def api_draw(project, body):
@@ -370,6 +381,9 @@ def api_draw(project, body):
             raise ApiError(f"Un tirage {year} existe déjà.", 409, code="exists")
 
     try:
+        # The draw knows nothing about messages; check the template first anyway, so that a typo
+        # is reported before the solver runs rather than at sending time.
+        template, template_notices = sender.Sender(project.base).load_template()
         result = project.draw(year, dry_run=dry)
     except Santa.SantaError as e:
         lines = [{"level": "error", "text": e.message}]
@@ -380,18 +394,124 @@ def api_draw(project, body):
         return {"ok": False, "status": 1, "dry_run": dry, "history": project.list_history(),
                 "lines": [{"level": "error", "text": f"Erreur de fichier : {e}"}]}
 
-    lines = lines_from(result.notices)
-    if result.preview:
-        subject, text, source = result.preview
-        lines.append({"level": "info", "text": f"Aperçu du message ({source}, personnages fictifs) :"})
+    lines = lines_from(template_notices + result.notices)
+    if result.feasible and dry:
+        subject, text = template.preview(year)
+        lines.append({"level": "info", "text": f"Aperçu du message ({template.source}, personnages fictifs) :"})
         lines += [{"level": "preview", "text": t} for t in
                   [f"Subject: {subject}", "─" * 40] + text.rstrip("\n").split("\n")]
+        lost = contactless(project)
+        if lost:
+            lines.append({"level": "warn", "text": f"Sans moyen de contact : {', '.join(lost)}. Le tirage reste possible ; "
+                                                   "leur message sera à remettre en main propre."})
     elif result.feasible:
-        rel = os.path.relpath(project.base, ROOT)
-        where = "" if rel == "." else f' -D "{rel}"'
-        lines.append({"level": "info", "text": f"Les mails sont dans {project.output_dir}/. Pour les envoyer : ./ssm.sh{where} -s"})
+        lines.append({"level": "info", "text": "Le tirage est enregistré. Onglet Envoi : les messages se fabriquent et partent de là "
+                                               "(ou en ligne de commande : sender.py)."})
+        lost = contactless(project)
+        if lost:
+            lines.append({"level": "warn", "text": f"Sans moyen de contact : {', '.join(lost)}. Ajoutez-en un quand vous voulez : "
+                                                   "l'envoi prend les contacts du moment."})
     return {"ok": result.feasible, "status": 0 if result.feasible else 1, "dry_run": dry,
             "lines": lines, "history": project.list_history()}
+
+
+def contactless(project):
+    """Names of the participants nobody can reach (a warning at draw time, never an error)."""
+    try:
+        return [p.name for p in project.load_people(check=False) if sender.Contacts(p).channel == "none"]
+    except Santa.SantaError:
+        return []
+
+
+SMS_FILE = "sms.json"          # in the root folder: the phone is yours, not a set's
+
+
+def read_sms_config():
+    """The saved SMSGate settings (``{}`` if none). Lives next to the sets, shared by all of them."""
+    try:
+        data = Santa.read_json(ROOT / SMS_FILE, {})
+    except Santa.SantaError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def sms_gateway():
+    """A ``sender.SmsGateway`` from the saved settings, or ``None`` if not configured."""
+    return sender.load_sms_config(ROOT / SMS_FILE)
+
+
+def deliveries_payload(project, year=None):
+    """Who has a message in this draw, by which channel, and where it stands. Never what it says."""
+    try:
+        status = sender.Sender(project.base).status(year)
+    except Santa.SantaError as e:
+        return {"ok": True, "year": None, "deliveries": [], "reason": e.message, "years": [],
+                "mail_ready": sender.mail_available(), "sms_ready": sms_gateway() is not None}
+    return {"ok": True, "year": status.year, "generated_at": status.generated_at, "years": sender.Sender(project.base).years(),
+            "mail_ready": sender.mail_available(), "sms_ready": sms_gateway() is not None,
+            "notices": [n.text for n in status.notices],
+            "deliveries": [{"name": d.name, "channel": d.channel, "contact": d.contact, "state": d.state, "how": d.how}
+                           for d in status.deliveries]}
+
+
+def optional_year(body):
+    return parse_year(body) if body.get("year") is not None else None
+
+
+def api_deliveries(project, body=None):
+    return deliveries_payload(project, optional_year(body or {}))
+
+
+def person_name(body):
+    name = body.get("name")
+    if not isinstance(name, str) or not name:
+        raise ApiError("Il manque le nom de la personne.")
+    return name
+
+
+def api_send(project, body):
+    """E-mail one person's message with msmtp; the page calls this once per person, so it can show progress."""
+    year = optional_year(body)
+    try:
+        sender.Sender(project.base).send_mail(person_name(body), year)
+    except Santa.SantaError as e:
+        raise ApiError(e.message + (f" {e.hint}" if e.hint else ""), 422) from None
+    return deliveries_payload(project, year)
+
+
+def api_send_sms(project, body):
+    """SMS one person's message through the configured SMSGate phone."""
+    year = optional_year(body)
+    gateway = sms_gateway()
+    if gateway is None:
+        raise ApiError("La passerelle SMS n'est pas configurée (Envoi, « Réglages SMS »).", 422)
+    try:
+        sender.Sender(project.base).send_sms(person_name(body), gateway, year)
+    except Santa.SantaError as e:
+        raise ApiError(e.message + (f" {e.hint}" if e.hint else ""), 422) from None
+    return deliveries_payload(project, year)
+
+
+def api_message(project, body):
+    """The text of a message to hand over by hand.
+
+    It says who the person drew: the page copies it to the clipboard and does
+    not display it (only when the clipboard is refused, and the organizer asks).
+    """
+    try:
+        return {"ok": True, **sender.Sender(project.base).text_for(person_name(body), optional_year(body))}
+    except Santa.SantaError as e:
+        raise api_error(e, 404) from None
+
+
+def api_mark_sent(project, body):
+    """Record that a message was handed over."""
+    year = optional_year(body)
+    try:
+        sender.Sender(project.base).mark_delivered(person_name(body), year)
+    except Santa.SantaError as e:
+        raise api_error(e, 404) from None
+    return deliveries_payload(project, year)
 
 
 def api_history_import(project, body):
@@ -412,27 +532,6 @@ def api_history_import(project, body):
     except Santa.SantaError as e:
         raise ApiError(e.message) from None
     return {"ok": True, "history": project.list_history(), "unknown": unknown}
-
-
-def api_history_read(project, body):
-    """Show the pairs of a *past* draw. The only route that reveals who gave to whom.
-
-    Everything else on this server is count-only, so this one is opt-in twice:
-    the page asks for it through its "unsafe mode", and the request must say
-    so (``"unsafe": true``). The draw of the current calendar year stays
-    secret whatever the request says: seeing last year's pairs spoils
-    little, seeing this year's spoils the game.
-    """
-    if body.get("unsafe") is not True:
-        raise ApiError("Cette route demande le mode non sécurisé.", 403)
-    year = parse_year(body)
-    if year >= datetime.date.today().year:
-        raise ApiError(f"Le tirage de {year} reste secret : seules les années passées peuvent être affichées.", 403)
-    try:
-        draw = project.read_history(year)
-    except Santa.SantaError as e:
-        raise ApiError(e.message, 404) from None
-    return {"ok": True, **draw, "pairs": [{"from": a, "to": b} for a, b in draw["pairs"]]}
 
 
 def api_history_delete(project, body):
@@ -504,7 +603,7 @@ def summarize_set(path, set_id, name):
     for p in sorted(hist.glob("*.json")) if hist.is_dir() else []:
         if p.stem.isdigit():
             years.append(int(p.stem))
-    mtimes = [(path / f).stat().st_mtime for f in ("participants.json", "rules.json", Santa.DEFAULT_TEMPLATE_PATH)
+    mtimes = [(path / f).stat().st_mtime for f in ("participants.json", "rules.json", sender.DEFAULT_TEMPLATE_PATH)
               if (path / f).is_file()]
     settings = rules.get("settings")
     return {
@@ -568,7 +667,7 @@ def api_sets_create(body):
         if source is not None:
             files = ["participants.json", "rules.json"]
             if body.get("copy_message", True):
-                files.append(Santa.DEFAULT_TEMPLATE_PATH)
+                files.append(sender.DEFAULT_TEMPLATE_PATH)
             for f in files:
                 if (source / f).is_file():
                     shutil.copy2(source / f, target / f)
@@ -608,15 +707,57 @@ def api_sets_delete(body):
     return sets_payload(trashed=str(dest))
 
 
-GET_ROUTES = {"/api/state": api_state}
+GET_ROUTES = {"/api/state": api_state, "/api/deliveries": api_deliveries}
 POST_ROUTES = {
     "/api/validate": api_validate, "/api/save": api_save, "/api/simulate": api_simulate,
     "/api/template/preview": api_template_preview, "/api/draw": api_draw,
-    "/api/history/import": api_history_import, "/api/history/delete": api_history_delete, "/api/history/read": api_history_read,
+    "/api/send": api_send, "/api/send-sms": api_send_sms, "/api/deliveries/message": api_message, "/api/deliveries/mark": api_mark_sent,
+    "/api/history/import": api_history_import, "/api/history/delete": api_history_delete,
 }
 # Routes about the list of sets itself: they take no ``project`` and need no set header.
-ROOT_GET = {"/api/sets": api_sets}
-ROOT_POST = {"/api/sets/create": api_sets_create, "/api/sets/rename": api_sets_rename,
+def api_sms_get(_body=None):
+    """The SMS settings for the form. The password itself is never sent back."""
+    c = read_sms_config()
+    return {"ok": True, "url": c.get("url", ""), "username": c.get("username", ""),
+            "country_code": c.get("country_code", ""), "has_password": bool(c.get("password"))}
+
+
+def sms_from_body(body):
+    """Settings from the form; an empty password keeps the saved one."""
+    saved = read_sms_config()
+    c = {k: str(body.get(k, "")).strip() for k in ("url", "username", "country_code")}
+    c["password"] = str(body.get("password") or "") or saved.get("password", "")
+    return c
+
+
+def api_sms_save(body):
+    c = sms_from_body(body)
+    if not any(str(body.get(k) or "").strip() for k in ("url", "username", "password", "country_code")):
+        # A completely empty form means "forget the gateway" (an empty password alone keeps the saved one).
+        path = ROOT / SMS_FILE
+        if path.exists():
+            path.unlink()
+        return api_sms_get()
+    try:
+        sender.SmsGateway(c["url"], c["username"], c["password"], country_code=c["country_code"])   # validates the form
+    except Santa.SantaError as e:
+        raise api_error(e) from None
+    Santa.write_atomic(ROOT / SMS_FILE, Santa.dump_json(c))                       # temp files are created private (0600)
+    return api_sms_get()
+
+
+def api_sms_test(body):
+    """Ask the phone's ``/health`` with the settings on the form (saved or not)."""
+    c = sms_from_body(body)
+    try:
+        sender.SmsGateway(c["url"], c["username"], c["password"], country_code=c["country_code"]).health()
+    except Santa.SantaError as e:
+        raise ApiError(e.message + (f" {e.hint}" if e.hint else ""), 422) from None
+    return {"ok": True}
+
+
+ROOT_GET = {"/api/sets": api_sets, "/api/sms": api_sms_get}
+ROOT_POST = {"/api/sms/save": api_sms_save, "/api/sms/test": api_sms_test, "/api/sets/create": api_sets_create, "/api/sets/rename": api_sets_rename,
              "/api/sets/delete": api_sets_delete}
 
 

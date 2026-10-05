@@ -16,14 +16,14 @@ class Cli(ProjectCase):
         r = self.run_santa("--dry-run")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("✅ Un tirage valide existe (rien n'a été écrit).", r.stdout)
-        self.assertIn("📧 Aperçu du message", r.stdout)
-        self.assertIn("Rudolph", r.stdout)
+        self.assertNotIn("Aperçu", r.stdout)                   # messages are sender.py's business
 
-    def test_real_draw_prints_files_and_exits_zero(self):
+    def test_real_draw_records_the_draw_and_nothing_else(self):
         self.project(rules={})
         r = self.run_santa("--year", "2026")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn("✅ Tirage généré : 6 mails dans secretSantaFiles/", r.stdout)
+        self.assertIn("Tirage enregistré pour 6 participants.", r.stdout)
+        self.assertFalse((self.dir / "secretSantaFiles").exists())
         self.assertIn("🗂️  Historique enregistré dans history/2026.json", r.stdout)
         self.assertNotIn("→", r.stdout)                       # no pair ever printed
 

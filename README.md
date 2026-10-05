@@ -1,10 +1,15 @@
 # Secret Santa
 
-A small command-line Secret Santa generator. It draws names with a
-constraint solver ([OR-Tools CP-SAT](https://developers.google.com/optimization)),
-so that **every rule you declare is guaranteed to hold** (or the program tells
-you that no valid draw exists), and it writes one ready-to-send mail per
-participant.
+A small Secret Santa tool made of two independent programs:
+
+- **`Santa.py` makes the draw.** It uses a constraint solver
+  ([OR-Tools CP-SAT](https://developers.google.com/optimization)), so that
+  **every rule you declare is guaranteed to hold** (or the program tells you
+  that no valid draw exists). Its only output is `history/<year>.json`.
+- **`sender.py` turns a recorded draw into messages and delivers them**: e-mail
+  through `msmtp`, SMS through an Android phone running
+  [SMSGate](https://sms-gate.app/), or by hand for anything else (Messenger,
+  a note at lunch...). It never draws and never needs OR-Tools.
 
 The interesting part is the rules file: couples, households, "not the same
 person as last year", forced pairs and more, all declared in plain JSON.
@@ -18,6 +23,7 @@ person as last year", forced pairs and more, all declared in plain JSON.
 - [Priorities and soft rules](#priorities-and-soft-rules)
 - [Recipes](#recipes)
 - [How the history works](#how-the-history-works)
+- [Contacts and sending messages](#contacts-and-sending-messages)
 - [Message template](#message-template)
 - [Command-line options](#command-line-options)
 - [Web interface](#web-interface)
@@ -29,9 +35,13 @@ person as last year", forced pairs and more, all declared in plain JSON.
 
 ## Requirements
 
-- Python 3.9+ and `ortools` (`pip install ortools`, ideally in a `venv/`)
-- For `ssm.sh`: `bash` 4+, `jq`, and [`msmtp`](https://marlam.de/msmtp/)
-  configured with a working account (only needed to send the mails)
+- Python 3.9+ and `ortools` (`pip install ortools`, ideally in a `venv/`), for
+  `Santa.py` only. `sender.py` and `webui.py` need nothing beyond the standard
+  library, but import `Santa.py` for the history and participants files, so
+  they do load OR-Tools.
+- For `ssm.sh`: `bash` 4+, `jq` (only for `-r`)
+- To send e-mail: [`msmtp`](https://marlam.de/msmtp/) configured with a working account
+- To send SMS: an Android phone running SMSGate, see [SMS with SMSGate](#sms-with-smsgate)
 
 ## Quick start
 
@@ -44,7 +54,8 @@ cat > participants.json <<'EOF'
   {"name": "Alice", "email": "alice@example.org"},
   {"name": "Bob",   "email": "bob@example.org"},
   {"name": "Carol", "email": "carol@example.org"},
-  {"name": "Dave",  "email": "dave@example.org"}
+  {"name": "Dave",  "email": "dave@example.org"},
+  {"name": "Eve",    "phone": "+33 6 12 34 56 78"}
 ]
 EOF
 
@@ -52,13 +63,18 @@ EOF
 echo '{}' > rules.json
 
 # 3. check that a valid draw exists without writing anything
-#    (this also previews the mail text, see "Message template")
 python3 Santa.py --dry-run
 
-# 4. draw for real, then send
-./ssm.sh -g
-./ssm.sh -s              # sends the mails, moves each one to secretSantaFiles/sent/
+# 4. draw for real: this only records history/<year>.json
+python3 Santa.py
+
+# 5. proofread the message (fictional characters), then send it
+python3 sender.py --preview
+python3 sender.py --send     # e-mails; the others: web page, or --show / --mark
+python3 sender.py --status   # who has received what (never who draws whom)
 ```
+
+`./ssm.sh -g -n`, `-g`, `-m`, `-s`, `-l` do the same through a wrapper.
 
 Participants get a stable `id` the first time you draw for real (see
 [Identifiers](#identifiers)); you never have to write one.
@@ -67,15 +83,17 @@ Participants get a stable `id` the first time you draw for real (see
 
 | File | Role |
 |------|------|
-| `participants.json` | Input. Array of `{"name", "email"}`, plus an `id` that the program adds. **Names must be unique**: they identify people in the rules. See [Identifiers](#identifiers). |
+| `participants.json` | Input. Array of `{"name"}` plus optional contacts (`email`, `phone`, `messenger`, `other`, `prefer`), plus an `id` that the program adds. `Santa.py` only reads names and ids and keeps the other fields untouched; `sender.py` reads the contacts. **Names must be unique**: they identify people in the rules. See [Identifiers](#identifiers). |
 | `rules.json` | Input. The constraints, see [Rules reference](#rules-reference). Missing file = no rule. |
-| `secretSantaFiles/<name>.mail` | Output. One mail per giver: first line is the address, the rest is a full MIME message (UTF-8). |
-| `history/<year>.json` | Output. The complete draw of that year (by participant `id`), used by the `history` rule next year. |
-| `message.txt` | Input, optional. The text of the mails, see [Message template](#message-template). Without it, a built-in message is used. |
-| `Santa.py` | The generator: a command-line tool and an importable library, see [Using Santa.py as a library](#using-santapy-as-a-library). |
+| `history/<year>.json` | Output of `Santa.py`, and **the draw itself** (by participant `id`). Used by the `history` rule next year, and by `sender.py` to make the messages. |
+| `message.txt` | Input of `sender.py`, optional. The text of the messages, see [Message template](#message-template). Without it, a built-in message is used. |
+| `delivery/<year>.json` | Output of `sender.py`. Who has been handed their message and how (`email`, `sms`, `manual`), tied to one specific draw. Holds no pair. |
+| `sms.json` | Optional, `sender.py --sms` and the web page. The SMSGate phone, see [SMS with SMSGate](#sms-with-smsgate). Holds a password: private. |
+| `Santa.py` | The draw: a command-line tool and an importable library, see [Using Santa.py as a library](#using-santapy-as-a-library). **It does not know what a message is.** |
+| `sender.py` | The messages: preview, e-mail, SMS, hand-over tracking. A command-line tool and a library, see [Contacts and sending messages](#contacts-and-sending-messages). |
 | `tests/` | The test suite, see [Development and tests](#development-and-tests). |
 | `webui.py`, `web/index.html` | Optional. Local web interface with several *sets* (`sets/<name>/`, each holding its own files above), see [Web interface](#web-interface). |
-| `ssm.sh` | Wrapper around `Santa.py`: generate, send the mails, add any kind of rule interactively, clean up. See [ssm.sh](#ssmsh). |
+| `ssm.sh` | Wrapper around the two programs: draw, preview, send, status, and add any kind of rule interactively. See [ssm.sh](#ssmsh). |
 
 ## Rules reference
 
@@ -303,9 +321,126 @@ Details worth knowing:
   counts are stored, never the offending pairs. Old files without this key are
   read fine.
 
+## Contacts and sending messages
+
+### Why two programs
+
+Drawing and delivering have nothing in common except the list of people.
+Keeping them apart means the draw can be read, tested and trusted without
+meeting a mail library, an SMS client or a template, and means a message can be
+produced again, by another channel or after a contact changed, without
+touching the draw. The interface between them is one file: `history/<year>.json`.
+`sender.py` reads it, `Santa.py` never reads anything `sender.py` writes.
+(`tests/test_sender.py` even checks that `Santa.py` doesn't mention `msmtp`,
+SMS or `sender`.)
+
+### Contacts
+
+Only `name` is required. A person may have any of these ways to be reached,
+none of which is needed to *draw*; one is needed to *deliver*:
+
+| Field | Meaning | Delivered by |
+|-------|---------|--------------|
+| `email` | An address. | `msmtp`: `sender.py --send`, or the Envoi tab. |
+| `phone` | A number. | SMS through SMSGate (`--sms`, or the Envoi tab). Without a gateway: by hand (WhatsApp, Signal, your own phone...). |
+| `messenger` | A Messenger name or link. | By hand: there is no official way to send Messenger messages from a program. |
+| `other` | Free text, e.g. `hand it over at lunch`. | By hand. |
+| `prefer` | Which of the above to use when several are set (default: the order above). | |
+
+```json
+{"name": "Carol", "email": "carol@example.org", "phone": "+33 6 12 34 56 78", "prefer": "phone"}
+```
+
+**The channel is decided when the message goes out**, never at the draw:
+`sender.py` reads the contacts as they are *now*, so a number or an address
+added after the draw is used without redrawing. A person with no contact at
+all is still drawn (with a warning), and their message is yours to hand over.
+For SMS and chat the subject line of the template is ignored: only the body is
+sent.
+
+### `sender.py`
+
+```text
+python3 sender.py [--base-dir DIR] [--participants FILE] [--history-dir DIR]
+                  [--template FILE] [--year YEAR] [--sms-config FILE]
+                  ACTION
+```
+
+| Action | What it does |
+|--------|--------------|
+| `--status` | Who has received their message, by which channel and how. Never prints a pair or a message. |
+| `--preview` | The message with two [storybook characters](#preview-characters): safe to proofread, reads no draw. |
+| `--send` | E-mails every pending message of people whose channel is e-mail (through `msmtp`). |
+| `--sms` | Texts every pending message of people whose channel is phone (needs `sms.json`). |
+| `--show NAME` | Prints NAME's message, to hand it over. **It names the person drawn.** |
+| `--mark NAME` | Records that NAME's message was handed over by hand. |
+
+`--year` picks the draw (default: the latest one really drawn, not an imported
+one). Everything that can't be sent from here is listed at the end as "messages
+to hand over". Exit code 1 if any sending failed.
+
+How it keeps promises:
+
+- **A message is never sent twice.** Each delivery is recorded in
+  `delivery/<year>.json`, tied to the exact draw (its `generated_at` and a hash
+  of its pairs). Redrawing a year starts a new, empty tally. A failure records
+  nothing, so running the same command again only retries what is missing.
+- **People are matched by `id`**, so a renamed person keeps their delivery state.
+- **The messages exist only while they are being sent.** There are no `.mail`
+  files: the text is rendered in memory from the draw and the current template
+  and goes straight to `msmtp`, the phone or your clipboard.
+- `msmtp` is found on the `PATH`; set `SANTA_MSMTP` to use another program
+  (the address is appended as its last argument), which is how the tests use a
+  fake one.
+
+### SMS with SMSGate
+
+[SMSGate](https://sms-gate.app/) (Apache-2.0) is an Android app that turns a
+phone into an SMS gateway: your computer calls a small HTTP API, the phone
+sends the SMS with its own SIM card, at the price of your plan. Nothing else is
+needed: no modem, no paid service.
+
+1. Install SMSGate on the phone (APK from its GitHub releases or F-Droid-style
+   store; Android 5+), allow SMS permissions.
+2. Switch on **Local server**. The app shows the address (e.g.
+   `http://192.168.1.42:8080`), a username and a password.
+3. Put the phone and the computer on the **same network**.
+4. Tell the tool, either in the web page (Envoi, *Réglages SMS*, which has a
+   *Tester* button) or in `sms.json` next to `participants.json`:
+
+```json
+{"url": "http://192.168.1.42:8080", "username": "sms", "password": "...", "country_code": "+33"}
+```
+
+`country_code` turns `06 12 34 56 78` into `+33 6 12 34 56 78`; leave it out
+and numbers are sent as typed (the tool never guesses a country). Under the
+hood: `POST /message` with the text and the numbers, then `GET /message/<id>`
+until the state is final (`Sent`/`Delivered` is success, `Failed` is an error
+with the reason the phone gave; still `Pending` after 10 s counts as accepted).
+
+Limits worth knowing:
+
+- Over plain `http`, the text of the message, **which names the person
+  drawn**, crosses your network in clear. Fine on a home Wi-Fi you trust; not
+  on a shared one.
+- Mobile operators may throttle or block bulk SMS: a handful of messages is
+  fine, hundreds are not.
+- `sms.json` lives at the root folder of the web interface and is shared by
+  every set; for a set used from the command line put an `sms.json` in its
+  folder (or give `--sms-config`).
+- It is tested against a fake SMSGate server that follows the documented API,
+  not against a real phone: do a first run with two people you can ask.
+
+### Messenger, WhatsApp and the rest
+
+There is no official, free way for a program to send those. The Envoi tab
+helps instead: *Copier le message* puts the text in the clipboard without
+displaying it, *Ouvrir Messenger* / *Ouvrir SMS* open the right app, and
+*Marquer comme remis* records it.
+
 ## Identifiers
 
-A participant is `{"id", "name", "email"}`:
+A participant is `{"id", "name", ...contacts}`:
 
 - `name` is what humans read, and what `rules.json` refers to. A name that
   matches nobody in a rule is a loud error, so a typo can't go unnoticed.
@@ -321,7 +456,7 @@ the rules that mention them** (the web interface does that for you).
 
 ## Message template
 
-The text of the mails is not in the code: it lives in `message.txt`, which you
+The text of the messages is not in the code: it lives in `message.txt`, which you
 can edit freely (tone, party date, budget, language...). The format is a
 mail in miniature: a `Subject:` line, **one blank line**, then the body.
 
@@ -342,19 +477,18 @@ in the body:
 |----------|-------------|
 | `{recipient}` | The name of the person this participant gives a gift to. |
 | `{santa}` | The name of the participant receiving the mail. |
-| `{year}` | The draw year (`--year`, default: the current year). |
+| `{year}` | The year of the draw being sent. |
 
 To write a literal brace, double it: `{{` and `}}`. Other characters, `$`
 included, are plain text.
 
-The template is checked **before** the draw, by rendering it once with dummy
-names, so a mistake stops the program immediately instead of after the solver
-has run. `--dry-run` prints that preview, with two [storybook characters](#preview-characters)
-in place of the participants, which makes it a safe way to proofread your message:
+The template is checked whenever it is read: the web page validates it when you
+save, `sender.py` before anything is sent. `python3 sender.py --preview` prints
+the message with two [storybook characters](#preview-characters) in place of the
+participants, which makes it a safe way to proofread your message:
 
 ```text
-$ python3 Santa.py --dry-run
-✅ Un tirage valide existe (rien n'a été écrit).
+$ python3 sender.py --preview
 📧 Aperçu du message (message.txt, personnages fictifs) :
    Subject: 🎅 Père Noël Secret 2026
    ────────────────────────────────────────
@@ -362,10 +496,12 @@ $ python3 Santa.py --dry-run
    ...
 ```
 
+It is read at *sending* time, not at the draw: you can still rewrite it after drawing.
+
 #### Preview characters
 
-Whenever the program renders your message without a real draw behind it (the
-check before solving, `--dry-run`, the live preview of the web page), it
+Whenever your message is rendered without a real draw behind it (`sender.py
+--preview`, the live preview of the web page), it
 fills the variables with two **fictional characters**:
 
 | Variable | Preview value | Plays the role of |
@@ -389,7 +525,7 @@ Rules the checker enforces, each with a clear error message:
   lone brace, or something like `{0}` is an error rather than text that would
   leak into the mails.
 
-Use `--template <file>` (or `./ssm.sh -g -t <file>`) to pick another file, for
+Use `sender.py --template <file>` (or `./ssm.sh -s -t <file>`) to pick another file, for
 example one per family. An explicit file that does not exist is an error; the
 default `message.txt` simply falls back to the built-in text if absent. Files
 saved by Windows editors (CRLF line endings, BOM) are accepted.
@@ -398,9 +534,8 @@ saved by Windows editors (CRLF line endings, BOM) are accepted.
 
 ```text
 python3 Santa.py [--base-dir DIR] [--participants FILE] [--rules FILE]
-                 [--output-dir DIR] [--history-dir DIR] [--year YEAR]
-                 [--dry-run] [--emit-compiled FILE] [--template FILE]
-                 [--seed N]
+                 [--history-dir DIR] [--year YEAR]
+                 [--dry-run] [--emit-compiled FILE] [--seed N]
 ```
 
 | Option | Default | Description |
@@ -408,35 +543,38 @@ python3 Santa.py [--base-dir DIR] [--participants FILE] [--rules FILE]
 | `--base-dir` | `.` | Folder holding the project; every other path below is relative to it (unless absolute). One folder = one participant list with its rules, message and history, which is how the web interface keeps several lists. |
 | `--participants` | `participants.json` | Participants file. |
 | `--rules` | `rules.json` | Rules file. |
-| `--output-dir` | `secretSantaFiles` | Where the `.mail` files go. |
 | `--history-dir` | `history` | Where draws are stored and read back. |
-| `--year` | current year | Year label of the history file. |
-| `--dry-run` | off | Check feasibility only: no mail, no history file, no pair printed. Also prints a preview of the message with the [preview characters](#preview-characters) (Mère Noël and Rudolph). Safe to run as the organizer. |
+| `--year` | current year | Year label of the history file. A real draw writes `history/<year>.json` and nothing else. |
+| `--dry-run` | off | Check feasibility only: nothing written, no pair printed. Safe to run as the organizer. |
 | `--emit-compiled` | off | Also write the compiled rules (see [How it works](#how-it-works)) to the given file, for debugging. **Contains every pair of the history files**, so treat it like `history/`. |
-| `--template` | `message.txt` | Message template file, see [Message template](#message-template). |
 | `--seed` | off | **Tests only.** Makes the draw reproducible, which means anyone who knows the seed can redo it. A warning is printed. Never use it for a real draw. |
 
 ### ssm.sh
 
-`ssm.sh` wraps the common cases so you rarely need to call `Santa.py` directly.
+`ssm.sh` wraps the common cases so you rarely need to call the programs directly:
+`-g` runs `Santa.py`, `-m -s -S -l` run `sender.py`.
 
 | Option | Action |
 |--------|--------|
-| `-g` | Generate the draw (mails + history file). Uses `venv/` if it exists, otherwise the system `python3`. |
+| `-g` | Generate the draw (`history/<year>.json`). Uses `venv/` if it exists, otherwise the system `python3`. |
 | `-g -n` | Dry run: checks that a valid draw exists, writes nothing. |
 | `-g -y <year>` | Record the draw under another year (4 digits). |
 | `-g -e <file>` | Also write the compiled rules to `<file>` (debug, see the privacy notes). |
-| `-g -t <file>` | Use another message template than `message.txt`. |
-| `-s [-d <dir>]` | Send every `.mail` file of `<dir>` (default: `secretSantaFiles/` of the project) through `msmtp`. Each mail that went out is moved to `<dir>/sent/`, so after a failure you can run `-s` again and only the missing ones are sent. Exit code 1 if any failed. |
-| `-D <dir>` | Work on another project folder instead of the current one, e.g. `-D sets/Family` for a set of the web interface. `ssm.sh` finds `Santa.py` (and `venv/`) next to itself, so it can be run from anywhere. |
+| `-m` | Preview the message with fictional characters. |
+| `-s` | E-mail the pending messages (`sender.py --send`). Exit code 1 if any failed; run again to retry only those. |
+| `-S` | SMS the pending messages (`sender.py --sms`, needs `sms.json`). |
+| `-l` | Delivery status: who has received what. |
+| `-t <file>` | With `-m`, `-s`, `-S`: another message template than `message.txt`. |
+| `-y <year>` | With `-m`, `-s`, `-S`, `-l`: which draw (default: the latest). |
+| `-D <dir>` | Work on another project folder instead of the current one, e.g. `-D sets/Family` for a set of the web interface. `ssm.sh` finds `Santa.py`, `sender.py` (and `venv/`) next to itself, so it can be run from anywhere. |
 | `-r` | Add a rule to `rules.json`, through menus (see below). |
-| `-c` | Delete the generated `.mail` files, including the ones in `sent/`. |
 | `-h` | Show the help. |
 
-`-n`, `-y`, `-e` and `-t` only make sense with `-g`; used alone they are refused
-rather than silently ignored. Actions run in the order generate, add a rule,
-clean, send. If the draw fails (impossible rules), the script stops there:
-combining `-g -s` can never send mails left over from a previous run.
+`-n` and `-e` only make sense with `-g`, and `-t` with a message action; used
+alone they are refused rather than silently ignored. Actions run in this order:
+generate, add a rule, preview, e-mail, SMS, status. If the draw fails
+(impossible rules), the script stops there: combining `-g -s` can never send
+the message of an older draw.
 
 `-r` offers every rule type of `rules.json`:
 
@@ -455,9 +593,10 @@ Typical session:
 ```bash
 ./ssm.sh -r              # add rules as needed
 ./ssm.sh -g -n           # are they satisfiable?
+./ssm.sh -m              # proofread the message
 ./ssm.sh -g              # draw for real
-./ssm.sh -s              # send; mails that went out move to secretSantaFiles/sent/
-./ssm.sh -c              # remove the mails once everything is sent
+./ssm.sh -s -S           # e-mails, then SMS; the rest is handed over by hand
+./ssm.sh -l              # who is still waiting?
 
 ./ssm.sh -D sets/Family -g -n    # the same, on one set of the web interface
 ```
@@ -465,7 +604,7 @@ Typical session:
 ## Web interface
 
 An optional, self-contained module: it edits the same files, calls the same
-code, and does not change how `Santa.py` or `ssm.sh` work. Delete `webui.py` and
+code, and does not change how `Santa.py`, `sender.py` or `ssm.sh` work. Delete `webui.py` and
 `web/` and nothing else changes. No dependency beyond Python's standard library
 (and OR-Tools, already needed by `Santa.py`). The page is dark by design. Rule sections explain themselves in a small "?" bubble (hover, keyboard focus or tap). Icons are UTF-8 emoji, or [Tabler](https://tabler.io/icons) icons inlined as SVG so the page stays self-contained.
 
@@ -475,14 +614,14 @@ python3 webui.py --dir ~/santa   # another root folder
 python3 webui.py --port 0 --no-browser --verbose
 ```
 
-`webui.py` must sit next to `Santa.py`, with `web/index.html` beside it. It talks to `Santa.py` through its [library API](#using-santapy-as-a-library) only.
+`webui.py` must sit next to `Santa.py` and `sender.py`, with `web/index.html` beside it. It talks to them through their library APIs only; the draw and the delivery code stay in the two modules, the page only displays and asks.
 Default port is 8765 (`0` picks a free one). Stop it with Ctrl+C.
 
 ### Sets: several lists, several rule books
 
 A **set** is one participant list *together with* everything that depends on
 it: `participants.json`, `rules.json`, `message.txt`, `history/` and the
-generated mails. They are never separated, so rules can't end up pointing at
+delivery tally (`delivery/`). They are never separated, so rules can't end up pointing at
 people from another list, and next year's history rule only ever sees the
 draws of the same group.
 
@@ -490,7 +629,8 @@ Sets are the sub-folders of `sets/` under the root folder:
 
 ```text
 santa/
-├── Santa.py  ssm.sh  webui.py  web/
+├── Santa.py  sender.py  ssm.sh  webui.py  web/
+├── sms.json     (optional, shared SMS gateway)
 └── sets/
     ├── Family/    participants.json  rules.json  message.txt  history/
     ├── Office/    participants.json  rules.json  history/
@@ -527,11 +667,12 @@ delete them.
 
 | Tab | What it does |
 |-----|--------------|
-| Participants | Edit names and emails; paste a list. Renaming someone rewrites the rules that mention them, removing someone offers to clean those rules up. |
+| Participants | Edit names and contacts (a row opens to show phone, Messenger, other, and which to use); paste a list (`Name, e-mail`, `Name, phone` or just `Name`). Renaming someone rewrites the rules that mention them, removing someone offers to clean those rules up. |
 | Règles | Couples, groups, forbidden and forced pairs, the history rule, `single_cycle`, each with the advanced `priority` / `soft` / `relax` options, or the raw JSON. A side panel re-checks feasibility as you type and says which soft rules would be given up (by count, never by pair). |
 | Simulation | Runs 50 to 1000 throwaway draws with the *displayed* rules (saved or not) and shows how often each pair occurs. |
 | Message | Edits `message.txt` with a live preview that uses the [preview characters](#preview-characters). |
 | Tirage | Dry run, official draw, import of an older draw into `history/`, and setting a year aside. |
+| Envoi | The messages of the latest draw and where each one stands, with the contacts as they are today. **E-mails** and **SMS** are sent from here, one at a time with progress, retryable, and never twice (`delivery/`); *Réglages SMS* sets up the SMSGate phone and has a *Tester* button. **By hand** (Messenger, other, no contact, or SMS without a gateway): "Copier le message" puts the text on the clipboard *without displaying it*, "Ouvrir SMS" / "Ouvrir Messenger" open the right app, then "Marquer comme remis". If the clipboard is refused, you are asked before the text is shown. |
 
 Everything on these tabs applies to the set currently open.
 
@@ -542,10 +683,10 @@ How it behaves:
   anything is written. Each overwritten file is first copied to `<file>.bak`.
 - **The official draw is the same code as `ssm.sh -g`**: it calls
   `Project.draw()`, the call `Santa.py` itself makes, on the set's folder, so
-  the result, the mails and the history file are identical. It needs a
+  the result and the history file are identical, and like `Santa.py` it writes no message. It needs a
   confirmation, and replacing an existing year needs a second one. It is
   disabled while there are unsaved changes, so the draw always uses what is on
-  disk. Sending mails stays `ssm.sh -s`.
+  disk. Sending is the Envoi tab (or `ssm.sh -s -S`).
 - **Setting a year aside** renames `history/<year>.json` to
   `<year>.json.bak`; it is no longer read, but nothing is lost.
 - **Simulations are not the draw.** They use their own random numbers and are
@@ -562,17 +703,13 @@ inside a set that is on the server's own list; no path comes from the browser.
 The page loads nothing from the outside.
 
 Like the command line, the interface never shows who draws whom: neither for
-the official draw nor, by default, for past years (history is listed as year,
+the official draw nor for past years (history is listed as year,
 size and concessions only).
-
-**Unsafe mode** is the one opt-in exception. The gear menu in the top right
-has a "Mode non sécurisé" switch; after a confirmation, the Draw section gets
-a "Voir" button on every *past* year, which lists who gave to whom (names
-follow renames, thanks to the ids). Three guard rails: the mode is off again
-at every page load (nothing is stored), the request must explicitly say
-`"unsafe": true` (`POST /api/history/read`), and the draw of the current
-calendar year is refused whatever the request says, so the draw being played
-stays secret. `Project.read_history(year)` is the library call behind it.
+Two things carry message text: the message to hand over by hand, fetched when
+you click "Copier le message" and placed on the clipboard, not displayed; and
+SMS and e-mail, which leave the server for `msmtp` or the phone. The SMS
+password is saved in `sms.json` (readable by you only) and never sent back to
+the page.
 
 Don't expose the port to other machines (no tunnel, no
 `--host`): the files it edits hold everyone's addresses.
@@ -596,20 +733,40 @@ if not result.feasible:
 
 | Piece | Role |
 |-------|------|
-| `Project(base, ...)` | The files of one draw. `draw()`, `plan()`, `load_people()`, `ensure_ids()`, history management (`list_history`, `read_history`, `import_history`, `migrate_history`, `set_aside_history`) and `upgrade()`. |
+| `Project(base, ...)` | The files of one draw. `draw()`, `plan()`, `load_people()`, `ensure_ids()`, history management (`list_history`, `import_history`, `migrate_history`, `set_aside_history`) and `upgrade()`. |
+| `Person` | A participant: `name`, `id`, and `extra`, every other field of the file, kept verbatim (this is where `sender.py` finds the contacts). |
 | `build_plan(people, rules, year)` | Check the people, compile the raw rules, settle conflicts: a `Plan`. Everything before the solver. |
 | `solve(n, entries, single_cycle, seed=None)` | The CP-SAT model: a `Solution` (`assignment`, `violations`, `feasible`). |
-| `Template.parse / load`, `build_mail` | The message and the `.mail` files. |
 | `SantaError(message, hint)` | Bad input, in words meant for the user. "No valid draw" is *not* an error: it is `feasible == False`. |
 
+`sender.py` is a library too, with the same conventions (nothing prints or exits):
+
+```python
+import sender
+
+s = sender.Sender("sets/family")             # same folder as Santa.Project
+for d in s.status().deliveries:              # Delivery(name, channel, contact, state, how)
+    print(d.name, d.channel, d.state)
+s.send_mail("Alice")                         # records it; SantaError on failure
+s.send_sms("Bob", sender.SmsGateway("http://192.168.1.42:8080", "sms", "..."))
+s.text_for("Carol")["text"]                  # to hand over (names the person drawn)
+s.mark_delivered("Carol")
+```
+
+| Piece | Role |
+|-------|------|
+| `Sender(base, ...)` | `status`, `preview`, `text_for`, `send_mail`, `send_sms`, `mark_delivered`, `years`. |
+| `Contacts(person)`, `check_contacts` | Channel resolution and validation of the contact fields. |
+| `Template.parse / load`, `build_mime` | The message and the e-mail built from it. |
+| `SmsGateway`, `load_sms_config` | The SMSGate client. |
+
 Errors you can fix are `SantaError`; anything else is a bug or the disk
-(`OSError`). A draw first renders every mail in memory, then writes the history,
-then the mails, so a mail on disk always belongs to a recorded draw.
+(`OSError`).
 
 ## Development and tests
 
 ```bash
-python3 -m unittest discover -s tests        # about 10 seconds, no extra dependency
+python3 -m unittest discover -s tests        # under a minute, no extra dependency
 ```
 
 | File | What it checks |
@@ -617,24 +774,33 @@ python3 -m unittest discover -s tests        # about 10 seconds, no extra depend
 | `test_solver.py` | The solver against an exhaustive search on random small instances: same optimum at every priority level, hard rules never broken. |
 | `test_rules.py` | Rule expansion, options, conflicts by priority, participant checks. |
 | `test_history.py` | History by id: renames, leavers, old name-based files and their conversion, import. |
-| `test_template_mail.py` | Message parsing and errors, the preview characters, MIME structure of the mails. |
-| `test_project.py` | `Project.draw` end to end: what is written, the writing order, dry runs that write nothing, several folders side by side. |
+| `test_template_mail.py` | Message parsing and errors, the preview characters, MIME structure of the e-mail. |
+| `test_project.py` | `Project.draw` end to end: only `history/<year>.json` is written, contacts survive, dry runs write nothing, several folders side by side. |
 | `test_cli.py` | `Santa.py` as a user runs it: output, exit codes, `--base-dir`. |
-| `test_ssm.py` | `ssm.sh` with a fake `msmtp`: project folders, `sent/` tracking, retries, exit codes. |
-| `test_webui.py` | The web API over real HTTP: guards, sets, ids, simulation, draw, no pair ever returned. |
+| `test_sender.py` | Contacts and their validation, delivery state (never twice, tied to the draw, follows ids), e-mail with a fake `msmtp` (success, failure, retry), the `sender.py` command line, and that `Santa.py` knows nothing about delivery. |
+| `test_sms.py` | The SMSGate client against a fake server (`fake_smsgate.py`): numbers, errors, wrong password, unreachable phone, sending and recording. |
+| `test_ssm.py` | `ssm.sh` with a fake `msmtp`: draw, preview, send, status, project folders, exit codes. |
+| `test_webui.py` | The web API over real HTTP: guards, sets, ids, simulation, draw, deliveries, SMS settings, no pair ever returned. |
 
 `pytest` also works if you have it. `--seed` exists for these tests; a real
 draw never uses it.
 
 ## Privacy
 
-Two things on disk reveal the whole draw: the `.mail` files and
-`history/<year>.json`. If the organizer is also a participant, they will spoil
-their own surprise by opening them. Options:
+One thing on disk reveals the whole draw: `history/<year>.json`. No message
+file is ever written, but the text of a message names the person drawn, so
+whatever you do with `--show`, "Copier le message" or `--sms` puts that text
+where you sent it. If the organizer is also a participant, they will spoil their
+own surprise by opening the history or reading those messages. Options:
 
 - Run `--dry-run` to test your rules, and only do the real run when you are
   ready, without looking at the output.
-- Delete the `.mail` files once sent (`./ssm.sh -c`). That includes `secretSantaFiles/sent/`, where `-s` keeps the mails it has sent.
+- `--status` and the Envoi tab list who is waiting and by which channel, never
+  what the message says; `delivery/` holds no pair.
+- Copying a message for hand delivery puts the text in your clipboard, and in
+  the page's memory until it is closed.
+- SMS through SMSGate crosses your network in clear over `http`, and `sms.json`
+  holds the phone's password.
 - Keep `history/` somewhere you won't browse (or encrypted), but do keep it:
   it is what powers the "not twice in a row" rule.
 - Don't leave a file written by `--emit-compiled` lying around: it lists the
@@ -642,8 +808,6 @@ their own surprise by opening them. Options:
 - The messages about conflicts between rules (`⚖️ ...`) can mention a pair from
   a past year when a `forced` rule overrides it. That is a pair of *last*
   year, not of the current draw.
-- The web interface's [unsafe mode](#security-and-privacy) shows past pairs on
-  screen; keep it off when someone else can see your display.
 
 ## How it works
 
@@ -692,11 +856,16 @@ with every possible seed to recover the pairs.
 | `Noms en double` | Two participants share a name: add a surname or initial. |
 | `Identifiants en double` | Two participants share an `id` (usually a copy-pasted entry in `participants.json`). Delete one `id`: a new one is created at the next real draw. |
 | `N paire(s) de l'historique ignorée(s)` | Not an error: past draws mention people who are no longer participants. |
-| `N mail(s) d'un tirage précédent n'ont pas été remplacés` | `secretSantaFiles/` still holds mails of people who aren't in this draw. Don't send them: run `./ssm.sh -c`. |
+| `« msmtp » est introuvable` (Envoi tab) | E-mail needs `msmtp` installed and configured (`~/.msmtprc`). Without it, give people a phone/Messenger/other contact and hand the messages over from the same tab. |
+| `Aucun tirage enregistré` | `sender.py` reads a recorded draw: run `Santa.py` (a real draw, not `--dry-run`) first. |
+| `X a déjà reçu son message` | Already sent or marked: a message never goes twice. Redrawing the year starts a new tally. |
+| `Téléphone injoignable` | SMSGate: phone and computer must be on the same network, the app's Local server on, the address as shown in the app. |
+| `La passerelle SMS refuse l'identifiant` | The username/password in `sms.json` or *Réglages SMS* differ from the ones the app shows. |
+| `Sans moyen de contact : …` | Not an error: those people are drawn, and their message is yours to hand over. Add a contact whenever you like: `sender.py` and the Envoi tab use the current ones. |
 | `Aucun tirage ne respecte les règles strictes` | The hard rules contradict each other or leave too few options. Mark some `"soft": true`, shrink a group, or drop `single_cycle`/a `forced` rule. |
 | `Conflit à priorité égale` | A `forced` and a `forbidden` target the same pair with the same priority. Give one a higher `priority`. |
 | `Règle souple non respectée` | Not an error: a soft rule (by default some pairs of the oldest history year) had to be violated to make a draw possible. The number is how many pairs, or how many whole rules for `relax: "rule"`. |
-| `variable inconnue {x}` | `message.txt` uses a variable that doesn't exist. Only `{santa}`, `{recipient}` and `{year}` do (typo?). |
+| `variable inconnue {x}` | `message.txt` (read when sending) uses a variable that doesn't exist. Only `{santa}`, `{recipient}` and `{year}` do (typo?). |
 | `modèle invalide` | A lone `{` or `}` in `message.txt`. Double it (`{{`, `}}`) to get a literal brace. |
 | `la première ligne doit être « Subject: … »` / `la ligne 2 doit être vide` | `message.txt` doesn't follow the format: `Subject:` line, one blank line, then the body. |
 | `msmtp` fails | Check your `~/.msmtprc`; try `echo test \| msmtp you@example.org` first. |

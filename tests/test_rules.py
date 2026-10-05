@@ -5,7 +5,7 @@ from helpers import Santa, people_json
 
 
 def people(names=("Alice", "Bob", "Carol", "Dave")):
-    return [Santa.Person(p["name"], p["email"]) for p in people_json(list(names))]
+    return [Santa.Person(p["name"]) for p in people_json(list(names))]
 
 
 def compile_(rules, names=("Alice", "Bob", "Carol", "Dave"), year=2026, base="."):
@@ -71,23 +71,22 @@ class PeopleChecks(unittest.TestCase):
         Santa.check_people([Santa.Person(*i) if not isinstance(i, Santa.Person) else i for i in items])
 
     def test_valid(self):
-        self.check([("A", "a@x.org"), ("B", "b@x")])
+        self.check([("A",), ("B",)])
 
     def test_rejections(self):
-        for bad in ([("A", "a@x.org")], [("A", "a@x.org"), ("A", "b@x.org")], [("A", "nope"), ("B", "b@x.org")],
-                    [("A/B", "a@x.org"), ("B", "b@x.org")], [(".hid", "a@x.org"), ("B", "b@x.org")],
-                    [("", "a@x.org"), ("B", "b@x.org")], [("A\\B", "a@x.org"), ("B", "b@x.org")]):
+        for bad in ([("A",)], [("A",), ("A",)], [("A/B",), ("B",)], [(".hid",), ("B",)],
+                    [("",), ("B",)], [("A\\B",), ("B",)]):
             with self.subTest(bad=bad), self.assertRaises(Santa.SantaError):
                 self.check(bad)
 
     def test_duplicate_or_bad_ids(self):
         with self.assertRaises(Santa.SantaError):
-            self.check([Santa.Person("A", "a@x.org", "same"), Santa.Person("B", "b@x.org", "same")])
+            self.check([Santa.Person("A", "same"), Santa.Person("B", "same")])
         with self.assertRaises(Santa.SantaError):
-            self.check([Santa.Person("A", "a@x.org", "bad id!"), Santa.Person("B", "b@x.org")])
+            self.check([Santa.Person("A", "bad id!"), Santa.Person("B")])
 
     def test_assign_ids_fills_only_the_missing_ones_and_is_unique(self):
-        ps = [Santa.Person("A", "a@x", "keep"), Santa.Person("B", "b@x"), Santa.Person("C", "c@x")]
+        ps = [Santa.Person("A", "keep"), Santa.Person("B"), Santa.Person("C")]
         self.assertEqual(Santa.assign_ids(ps), 2)
         self.assertEqual(ps[0].id, "keep")
         self.assertEqual(len({p.id for p in ps}), 3)

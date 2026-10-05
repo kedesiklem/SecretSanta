@@ -1,8 +1,6 @@
 """Project.draw end to end: what gets written, in which order, and what never does."""
-import email
 import os
 import unittest
-from email import policy
 from unittest import mock
 
 from helpers import ProjectCase, Santa
@@ -13,46 +11,49 @@ def levels(result):
 
 
 class DryRun(ProjectCase):
-    def test_writes_nothing_and_previews_the_message(self):
+    def test_writes_nothing(self):
         p = self.project(rules={"couples": [["Alice", "Bob"]]})
         before = (self.dir / "participants.json").read_bytes()
         result = p.draw(2026, dry_run=True)
         self.assertTrue(result.feasible)
+        self.assertIsNone(result.history_file)
         self.assertEqual(sorted(os.listdir(self.dir)), ["participants.json", "rules.json"])
         self.assertEqual((self.dir / "participants.json").read_bytes(), before)       # not even ids
-        subject, body, source = result.preview
-        self.assertIn("Rudolph", body)
         self.assertEqual(levels(result)[-1], "ok")
 
-    def test_bad_message_stops_before_anything_else(self):
+    def test_a_broken_message_template_is_not_the_drawers_business(self):
         p = self.project(rules={})
-        self.write("message.txt", "no subject here")
-        with self.assertRaisesRegex(Santa.SantaError, "Subject"):
-            p.draw(2026, dry_run=True)
+        self.write("message.txt", "no subject here")                                  # only sender.py reads it
+        self.assertTrue(p.draw(2026, dry_run=True).feasible)
 
 
 class RealDraw(ProjectCase):
-    def test_valid_draw_files_ids_and_mail_contents(self):
+    def test_valid_draw_writes_only_the_history_and_ids(self):
         p = self.project(rules={"couples": [["Alice", "Bob"]]})
-        self.write("message.txt", "Subject: Noël {year}\n\nTu offres à {recipient}.\n")
         result = p.draw(2026, seed=7)
         self.assertTrue(result.feasible)
-        self.assertEqual(sorted(result.mails), sorted(["Alice", "Bob", "Carol", "Dave", "Eve", "Frank"]))
+        self.assertTrue(result.history_file.endswith("history/2026.json"))
         pairs = self.pairs_of(2026)
         self.assertEqual(len(pairs), 6)
         self.assertEqual(sorted(a for a, _ in pairs), sorted(b for _, b in pairs))      # a permutation
         self.assertTrue(all(a != b for a, b in pairs))
         self.assertNotIn(("Alice", "Bob"), pairs)
         self.assertNotIn(("Bob", "Alice"), pairs)
-        for giver, receiver in pairs:                                                   # each mail names its recipient
-            raw = (self.dir / "secretSantaFiles" / f"{giver}.mail").read_bytes()
-            address, rest = raw.split(b"\n", 1)
-            self.assertEqual(address.decode(), f"{giver.lower()}@example.org")
-            msg = email.message_from_bytes(rest, policy=policy.default)
-            self.assertEqual(msg["Subject"], "Noël 2026")
-            self.assertIn(f"Tu offres à {receiver}.", msg.get_content())
         self.assertTrue((self.dir / "participants.json.bak").exists())
         self.assertTrue(all("id" in x for x in self.read("participants.json")))
+        # The drawer produces the draw and nothing else: no mail, no message, no delivery state.
+        self.assertEqual(sorted(os.listdir(self.dir)),
+                         ["history", "participants.json", "participants.json.bak", "rules.json"])
+        self.assertEqual(os.listdir(self.dir / "history"), ["2026.json"])
+
+    def test_contacts_are_kept_verbatim_and_never_required(self):
+        self.write("participants.json", [{"name": "A", "email": "a@x.org", "phone": "+33 6 00 00 00 01", "prefer": "phone", "note": "x"},
+                                         {"name": "B"}])
+        Santa.Project(self.dir).draw(2026, seed=1)
+        people = {x["name"]: x for x in self.read("participants.json")}
+        self.assertEqual({k: v for k, v in people["A"].items() if k != "id"},
+                         {"name": "A", "email": "a@x.org", "phone": "+33 6 00 00 00 01", "prefer": "phone", "note": "x"})
+        self.assertEqual(set(people["B"]), {"id", "name"})
 
     def test_rules_hold_over_many_draws(self):
         p = self.project(rules={"couples": [["Alice", "Bob"]], "forced": [{"from": "Carol", "to": "Dave"}],
@@ -81,13 +82,6 @@ class RealDraw(ProjectCase):
         self.assertIn("warn", levels(result))
         self.assertEqual(sum(r["violations"] for r in self.read("history/2026.json")["relaxed_rules"]), 1)
 
-    def test_stale_mails_from_an_older_draw_are_flagged(self):
-        p = self.project(rules={})
-        self.write("secretSantaFiles/Zed.mail", "old")
-        result = p.draw(2026, seed=1)
-        warn = [n.text for n in result.notices if n.level == "warn"]
-        self.assertTrue(any("Zed" in t and "ssm.sh -c" in t for t in warn), warn)
-
     def test_seed_is_flagged_as_tests_only_and_is_reproducible(self):
         p = self.project(rules={})
         r1 = p.draw(2026, seed=5)
@@ -105,21 +99,7 @@ class RealDraw(ProjectCase):
 
 
 class WritingOrder(ProjectCase):
-    def test_history_is_written_before_the_mails(self):
-        p = self.project(rules={})
-        real = Santa.write_atomic
-
-        def fail_on_mail(path, data, **kw):
-            if str(path).endswith(".mail"):
-                raise OSError("disk full")
-            return real(path, data, **kw)
-
-        with mock.patch.object(Santa, "write_atomic", fail_on_mail), self.assertRaises(OSError):
-            p.draw(2026, seed=1)
-        self.assertTrue((self.dir / "history/2026.json").exists())       # a draw is never mailed without being recorded
-        self.assertFalse(list(self.dir.glob("secretSantaFiles/*.mail")))
-
-    def test_no_mail_when_the_history_cannot_be_saved(self):
+    def test_nothing_is_left_half_done_when_the_history_cannot_be_saved(self):
         p = self.project(rules={})
         real = Santa.write_atomic
 
@@ -130,15 +110,7 @@ class WritingOrder(ProjectCase):
 
         with mock.patch.object(Santa, "write_atomic", fail_on_history), self.assertRaises(OSError):
             p.draw(2026, seed=1)
-        self.assertFalse((self.dir / "secretSantaFiles").exists())
-
-    def test_every_mail_is_rendered_before_the_first_file_is_written(self):
-        p = self.project(rules={})
-        with mock.patch.object(Santa, "build_mail", side_effect=Santa.SantaError("boom")):
-            with self.assertRaises(Santa.SantaError):
-                p.draw(2026, seed=1)
-        self.assertFalse((self.dir / "history").exists())
-        self.assertFalse((self.dir / "secretSantaFiles").exists())
+        self.assertFalse(list((self.dir / "history").glob("*.json")) if (self.dir / "history").exists() else [])
 
 
 class Locations(ProjectCase):
@@ -152,25 +124,24 @@ class Locations(ProjectCase):
             self.assertTrue(p.draw(2026, seed=1).feasible)
         finally:
             os.chdir(cwd)
-        self.assertTrue((self.dir / "secretSantaFiles/Alice.mail").exists())
+        self.assertTrue((self.dir / "history/2026.json").exists())
         self.assertEqual(os.listdir(other), [])
 
     def test_two_projects_side_by_side_do_not_mix(self):
         a = Santa.Project(self.dir / "a")
         b = Santa.Project(self.dir / "b")
-        self.write("a/participants.json", [{"name": "A1", "email": "a1@x"}, {"name": "A2", "email": "a2@x"}])
-        self.write("b/participants.json", [{"name": "B1", "email": "b1@x"}, {"name": "B2", "email": "b2@x"}])
+        self.write("a/participants.json", [{"name": "A1"}, {"name": "A2"}])
+        self.write("b/participants.json", [{"name": "B1"}, {"name": "B2"}])
         a.draw(2026, seed=1)
         self.assertTrue((self.dir / "a/history/2026.json").exists())
         self.assertFalse((self.dir / "b/history").exists())
-        self.assertEqual(sorted(p.name for p in (self.dir / "a/secretSantaFiles").iterdir()), ["A1.mail", "A2.mail"])
 
     def test_custom_names(self):
-        self.write("who.json", [{"name": "A", "email": "a@x"}, {"name": "B", "email": "b@x"}])
-        p = Santa.Project(self.dir, participants="who.json", rules="r.json", history_dir="h", output_dir="out")
+        self.write("who.json", [{"name": "A"}, {"name": "B"}])
+        p = Santa.Project(self.dir, participants="who.json", rules="r.json", history_dir="h")
         self.write("r.json", {})
         p.draw(2026, seed=1)
-        self.assertTrue((self.dir / "h/2026.json").exists() and (self.dir / "out/A.mail").exists())
+        self.assertTrue((self.dir / "h/2026.json").exists())
 
 
 class InputErrors(ProjectCase):
@@ -183,8 +154,8 @@ class InputErrors(ProjectCase):
         self.write("participants.json", {"name": "A"})
         with self.assertRaisesRegex(Santa.SantaError, "liste"):
             Santa.Project(self.dir).draw(2026, dry_run=True)
-        self.write("participants.json", [{"name": "A"}, {"name": "B", "email": "b@x"}])
-        with self.assertRaisesRegex(Santa.SantaError, "email"):
+        self.write("participants.json", [{"name": "A"}, {"name": "A"}])
+        with self.assertRaisesRegex(Santa.SantaError, "en double"):
             Santa.Project(self.dir).draw(2026, dry_run=True)
 
 

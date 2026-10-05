@@ -3,34 +3,37 @@
 # ===============================================================
 # 🎅 Secret Santa Manager
 #
-# Thin wrapper around Santa.py: generate the draw, send the mails,
-# add rules to rules.json interactively, clean up generated files.
+# Thin wrapper around the two programs and the rules file:
+#   Santa.py   makes the draw (history/<year>.json), nothing else;
+#   sender.py  turns a draw into messages and delivers them (e-mail, SMS).
+# Plus an interactive helper to add rules to rules.json.
 #
 # Works on one "project folder" (participants.json, rules.json, message.txt,
-# history/, secretSantaFiles/): the current folder, or the one given with
-# -D, e.g. one of the sets/<name>/ folders of the web interface. Santa.py is
-# found next to this script, wherever you run it from.
+# history/, delivery/): the current folder, or the one given with
+# -D, e.g. one of the sets/<name>/ folders of the web interface. Santa.py and
+# sender.py are found next to this script, wherever you run it from.
 #
-# Needs: bash 4+, jq (for -r), msmtp (for -s), python3 with ortools
-# (a venv/ next to this script is used if present).
+# Needs: bash 4+, jq (for -r), python3 with ortools (for -g only), msmtp (for -s),
+# an SMSGate phone (for -S). A venv/ next to this script is used if present.
 # ===============================================================
 
 # === CONFIG ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_PATH="venv/bin/activate"        # looked up next to this script, then in the current folder
 SANTA_SCRIPT="$SCRIPT_DIR/Santa.py"
+SENDER_SCRIPT="$SCRIPT_DIR/sender.py"
 RULES_NAME="rules.json"
 PARTICIPANTS_NAME="participants.json"
-MAIL_DIR_NAME="secretSantaFiles"
 BASE_DIR="."                        # project folder, see -D
 
 # === OPTIONS ===
 run_santa=false
 send_mails=false
+send_sms=false
+preview=false
+status=false
 add_rule=false
-clear_mails=false
 dry_run=false
-directory=""
 base_given=false
 year=""
 emit_file=""
@@ -42,12 +45,15 @@ usage() {
     echo "Usage : $0 [options]"
     echo
     echo "Actions :"
-    echo "  -g                Générer le tirage (mails + historique)"
-    echo "  -s [-d <dossier>] Envoyer les mails (.mail) ; défaut : $MAIL_DIR_NAME/ du projet."
-    echo "                    Chaque mail envoyé est rangé dans <dossier>/sent/ : on peut relancer"
-    echo "                    après un échec sans renvoyer à tout le monde."
+    echo "  -g                Générer le tirage (écrit seulement history/<année>.json)"
+    echo "  -m                Aperçu du message (personnages fictifs, aucun tirage lu)"
+    echo "  -l                État de l'envoi : qui a reçu son message, par quel moyen"
+    echo "  -s                Envoyer par e-mail les messages en attente (msmtp)"
+    echo "  -S                Envoyer par SMS les messages en attente (passerelle SMSGate,"
+    echo "                    réglée dans sms.json du projet)"
+    echo "                    Un message n'est jamais envoyé deux fois (delivery/<année>.json) ;"
+    echo "                    messenger/autre : à remettre à la main depuis l'interface web."
     echo "  -r                Ajouter une règle à $RULES_NAME (interactif)"
-    echo "  -c                Supprimer les fichiers .mail générés (et ceux de sent/)"
     echo "  -h                Afficher cette aide"
     echo
     echo "Dossier du projet :"
@@ -55,21 +61,21 @@ usage() {
     echo "                    au lieu du dossier courant, par ex. un ensemble de l'interface web :"
     echo "                    -D sets/Famille"
     echo
-    echo "Options de génération (avec -g) :"
-    echo "  -n                Test à blanc : vérifie qu'un tirage existe, n'écrit rien"
-    echo "  -y <année>        Année enregistrée dans l'historique (défaut : année en cours)"
-    echo "  -e <fichier>      Écrit aussi les règles compilées (debug ; contient les paires"
+    echo "Options :"
+    echo "  -n                Avec -g : test à blanc, vérifie qu'un tirage existe, n'écrit rien"
+    echo "  -y <année>        Année du tirage (défaut : année en cours pour -g, le dernier tirage sinon)"
+    echo "  -e <fichier>      Avec -g : écrit aussi les règles compilées (debug ; contient les paires"
     echo "                    de l'historique, à traiter comme history/)"
-    echo "  -t <fichier>      Modèle de message (défaut : message.txt s'il existe)"
+    echo "  -t <fichier>      Avec -m/-s/-S : modèle de message (défaut : message.txt s'il existe)"
     echo
     echo "Exemples :"
-    echo "  $0 -g -n                       # règles satisfiables ? (affiche aussi l'aperçu du message)"
+    echo "  $0 -g -n                       # règles satisfiables ?"
     echo "  $0 -g                          # tirage pour l'année en cours"
-    echo "  $0 -g -y 2026 -e compiled.json # tirage 2026 + règles compilées"
-    echo "  $0 -D sets/Famille -g          # tirage de l'ensemble « Famille »"
-    echo "  $0 -s                          # envoi des mails du projet"
+    echo "  $0 -m                          # à quoi ressemblera le message ?"
+    echo "  $0 -s -S                       # envoi des mails puis des SMS"
+    echo "  $0 -l                          # qui a reçu quoi ?"
+    echo "  $0 -D sets/Famille -g -s       # tirage et envoi de l'ensemble « Famille »"
     echo "  $0 -r                          # ajouter une règle"
-    echo "  $0 -c                          # nettoyer les .mail"
     exit "${1:-1}"
 }
 
@@ -239,25 +245,34 @@ add_rule_interactive() {
     esac
 }
 
-# Delete generated mails.
-clear_mails_func() {
-    if [ -d "$MAIL_DIR" ]; then
-        rm -f "$MAIL_DIR"/*.mail "$MAIL_DIR"/sent/*.mail
-        rmdir "$MAIL_DIR/sent" 2> /dev/null   # only if now empty
-        echo "🧹 Fichiers .mail supprimés dans $MAIL_DIR."
-    else
-        echo "Aucun dossier $MAIL_DIR trouvé."
-    fi
+# Run one of the Python programs inside the venv when there is one.
+#   $1 = script, the rest = its arguments. Returns the script's status.
+run_python() {
+    local script="$1" candidate venv_active=false status
+    shift
+    for candidate in "$SCRIPT_DIR/$ENV_PATH" "$ENV_PATH"; do
+        if [ -f "$candidate" ]; then
+            source "$candidate"
+            venv_active=true
+            break
+        fi
+    done
+    $venv_active || echo "ℹ️  $ENV_PATH introuvable : utilisation du python3 du système."
+    python3 "$script" "$@"
+    status=$?
+    $venv_active && deactivate
+    return "$status"
 }
 
 # === OPTION PARSING ===
-while getopts "gsd:rcny:e:t:D:h" opt; do
+while getopts "gsSmlrny:e:t:D:h" opt; do
     case $opt in
         g) run_santa=true ;;
         s) send_mails=true ;;
-        d) directory="$OPTARG" ;;
+        S) send_sms=true ;;
+        m) preview=true ;;
+        l) status=true ;;
         r) add_rule=true ;;
-        c) clear_mails=true ;;
         n) dry_run=true ;;
         y) year="$OPTARG" ;;
         e) emit_file="$OPTARG" ;;
@@ -268,9 +283,12 @@ while getopts "gsd:rcny:e:t:D:h" opt; do
     esac
 done
 
-# -n, -y, -e and -t only make sense together with -g: refuse silently ignored flags.
-if ! $run_santa && { $dry_run || [ -n "$year" ] || [ -n "$emit_file" ] || [ -n "$template_file" ]; }; then
-    die "Les options -n, -y, -e et -t s'utilisent avec -g."
+# -n and -e only make sense with -g, -t only with the message actions.
+if ! $run_santa && { $dry_run || [ -n "$emit_file" ]; }; then
+    die "Les options -n et -e s'utilisent avec -g."
+fi
+if [ -n "$template_file" ] && ! $preview && ! $send_mails && ! $send_sms; then
+    die "L'option -t s'utilise avec -m, -s ou -S."
 fi
 if [ -n "$year" ] && ! [[ "$year" =~ ^[0-9]{4}$ ]]; then
     die "L'année doit comporter 4 chiffres (reçu : $year)."
@@ -281,7 +299,6 @@ BASE_DIR="${BASE_DIR%/}"
 [ -n "$BASE_DIR" ] || BASE_DIR="/"
 RULES_FILE="$BASE_DIR/$RULES_NAME"
 PARTICIPANTS_FILE="$BASE_DIR/$PARTICIPANTS_NAME"
-MAIL_DIR="${directory:-$BASE_DIR/$MAIL_DIR_NAME}"   # -d overrides it for -s and -c alike
 
 # === ACTIONS ===
 if $run_santa; then
@@ -290,29 +307,15 @@ if $run_santa; then
     $dry_run && santa_args+=(--dry-run)
     [ -n "$year" ] && santa_args+=(--year "$year")
     [ -n "$emit_file" ] && santa_args+=(--emit-compiled "$emit_file")
-    [ -n "$template_file" ] && santa_args+=(--template "$template_file")
 
     if $dry_run; then
         echo "🎅 Test à blanc du tirage Secret Santa..."
     else
         echo "🎅 Génération du tirage Secret Santa..."
     fi
-
-    venv_active=false
-    for candidate in "$SCRIPT_DIR/$ENV_PATH" "$ENV_PATH"; do
-        if [ -f "$candidate" ]; then
-            source "$candidate"
-            venv_active=true
-            break
-        fi
-    done
-    $venv_active || echo "ℹ️  $ENV_PATH introuvable : utilisation du python3 du système."
-
-    python3 "$SANTA_SCRIPT" "${santa_args[@]}"
+    run_python "$SANTA_SCRIPT" "${santa_args[@]}"
     santa_status=$?
-    $venv_active && deactivate
-
-    # If the draw failed, stop here: a following -s must never send stale mails.
+    # If the draw failed, stop here: a following -s must never send an older draw.
     [ "$santa_status" -eq 0 ] || exit "$santa_status"
 fi
 
@@ -320,38 +323,28 @@ if $add_rule; then
     add_rule_interactive
 fi
 
-if $clear_mails; then
-    clear_mails_func
+# Everything about messages goes through sender.py, one call per action so the
+# order is always: preview, send mails, send SMS, status.
+sender_args=(--base-dir "$BASE_DIR")
+[ -n "$year" ] && sender_args+=(--year "$year")
+[ -n "$template_file" ] && sender_args+=(--template "$template_file")
+sender_status=0
+if $preview; then
+    run_python "$SENDER_SCRIPT" "${sender_args[@]}" --preview || sender_status=$?
 fi
-
-if $send_mails; then
-    [ -d "$MAIL_DIR" ] || die "Le dossier des mails n'existe pas : $MAIL_DIR"
-    echo "📨 Envoi des mails de $MAIL_DIR..."
-    sent=0
-    failed=0
-    for mail in "$MAIL_DIR"/*.mail; do
-        if [ -f "$mail" ]; then
-            # Line 1 = bare address (msmtp argument); the rest is a complete
-            # RFC 5322 message (headers, blank line, UTF-8 body) piped as-is.
-            recipient=$(head -n 1 "$mail")
-            if tail -n +2 "$mail" | msmtp "$recipient"; then
-                echo "✉️  Mail envoyé à $recipient"
-                # Move it aside so that running -s again never sends it twice.
-                mkdir -p "$MAIL_DIR/sent" && mv -f "$mail" "$MAIL_DIR/sent/"
-                sent=$((sent + 1))
-            else
-                echo "❌ Échec de l'envoi pour $mail" >&2
-                failed=$((failed + 1))
-            fi
-        fi
-    done
-    echo "📬 $sent mail(s) envoyé(s), $failed échec(s)."
-    if [ "$failed" -gt 0 ]; then
-        echo "   Les mails en échec sont restés dans $MAIL_DIR : relancez -s pour les renvoyer." >&2
-        exit 1
-    fi
+if $send_mails && [ "$sender_status" -eq 0 ]; then
+    echo "📨 Envoi des mails..."
+    run_python "$SENDER_SCRIPT" "${sender_args[@]}" --send || sender_status=$?
 fi
+if $send_sms && [ "$sender_status" -eq 0 ]; then
+    echo "💬 Envoi des SMS..."
+    run_python "$SENDER_SCRIPT" "${sender_args[@]}" --sms || sender_status=$?
+fi
+if $status; then
+    run_python "$SENDER_SCRIPT" "${sender_args[@]}" --status || sender_status=$?
+fi
+[ "$sender_status" -eq 0 ] || exit "$sender_status"
 
-if ! $run_santa && ! $send_mails && ! $add_rule && ! $clear_mails; then
+if ! $run_santa && ! $send_mails && ! $send_sms && ! $preview && ! $status && ! $add_rule; then
     usage 1
 fi

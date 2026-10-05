@@ -1,0 +1,1331 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Père Noël secret</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%81%3C/text%3E%3C/svg%3E">
+<style>
+/* ------------------------------------------------------------------
+   Design tokens: a night-time palette. Deep blue-black ground, warm ivory
+   ink, and one accent: champagne gold (selection, primary action). Cranberry
+   means imposed or destructive, pine means valid, copper means "soft".
+   The simulation matrix is drawn like a Nordic knitting chart, in frost blue
+   so that it never competes with the gold chrome.
+------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+  --night: #0E1220;  --paper: #161B2E;  --raised: #1D2340;  --sunken: #0B0F1C;
+  --line: #2C3454;   --line-hi: #3C4670;  --line-soft: #1F2542;
+  --ink: #EDE8DC;    --ink-2: #B3B7C8;   --ink-3: #8C93AA;
+  --accent: #D6B573; --accent-hover: #E7CB93; --accent-weak: rgba(214,181,115,.14); --on-accent: #17120A;
+  --cran: #EE8399;   --cran-weak: rgba(238,131,153,.13); --cran-solid: #B02B4B;
+  --pine: #74D0AB;   --pine-weak: rgba(116,208,171,.13); --pine-solid: #1F5C49;
+  --straw: #EDAB68;  --straw-bg: rgba(237,171,104,.12); --straw-line: #E39C52;
+  --frost: 143, 172, 240;
+  --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Sitka Text", Cambria, Georgia, serif;
+  --sans: "Avenir Next", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { background: var(--night); }
+body { margin: 0; font: 15px/1.5 var(--sans); color: var(--ink); min-height: 100vh;
+  background: radial-gradient(1100px 420px at 50% -160px, #1B2247 0, rgba(27,34,71,0) 72%) no-repeat, var(--night); }
+::selection { background: rgba(214,181,115,.35); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 2px; }
+h1, h2, h3, p { margin: 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- top bar ---------- */
+.top { background: rgba(14,18,32,.92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
+.bar { display: flex; align-items: center; gap: 16px; max-width: 1240px; margin: 0 auto; padding: 10px 32px 0; flex-wrap: wrap; }
+.brand { padding-bottom: 8px; }
+.brand .logo { font-size: .85em; margin-right: 2px; }
+.brand h1 { font: 600 22px/1.15 var(--serif); letter-spacing: .01em; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; }
+.tab { appearance: none; background: none; border: 0; border-bottom: 3px solid transparent; padding: 14px 11px 11px; color: var(--ink-2); font-weight: 500; cursor: pointer; white-space: nowrap; display: inline-flex; gap: 7px; align-items: center; }
+.tab:hover { color: var(--ink); }
+.tab[disabled] { opacity: .4; cursor: default; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--straw-line); }
+.status { margin-left: auto; display: flex; align-items: center; gap: 12px; padding-bottom: 8px; }
+
+/* ---------- buttons, inputs ---------- */
+.btn { appearance: none; border: 1px solid transparent; border-radius: 8px; padding: 8px 14px; font-weight: 500; cursor: pointer; background: none; line-height: 1.3; white-space: nowrap; }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn.primary:disabled { background: #4B4A43; color: #8D8A7C; cursor: default; }
+.btn.line { border-color: var(--line-hi); background: var(--paper); }
+.btn.line:hover { border-color: var(--accent); color: var(--accent-hover); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { color: var(--ink-2); padding: 6px 8px; }
+.btn.ghost:hover { color: var(--ink); background: var(--line-soft); }
+.btn.danger { color: var(--cran); }
+.btn.danger:hover { background: var(--cran-weak); color: var(--cran); }
+.btn.solid-danger { background: var(--cran-solid); color: #fff; }
+.btn.small { padding: 4px 9px; font-size: 13px; }
+.in { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--sunken); padding: 8px 10px; }
+.in:hover { border-color: var(--line-hi); }
+.in:focus { border-color: var(--accent); outline: 2px solid var(--accent-weak); outline-offset: 0; }
+.in::placeholder { color: #7C84A6; }
+.in.bad { border-color: var(--cran); }
+textarea.in { resize: vertical; }
+label.field { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); font-weight: 500; }
+.pill { appearance: none; border: 1px solid transparent; border-radius: 999px; padding: 5px 12px 5px 10px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.pill.good { background: var(--pine-weak); color: var(--pine); }
+.pill.warn { background: var(--straw-bg); color: var(--straw); }
+.pill.bad  { background: var(--cran-weak); color: var(--cran); }
+.pill.idle { background: var(--line-soft); color: var(--ink-3); }
+.saved-note { white-space: nowrap; color: var(--ink-3); font-size: 13px; }
+
+/* ---------- page frame ---------- */
+main { max-width: 1240px; margin: 0 auto; padding: 34px 32px 80px; }
+.page-head { margin-bottom: 26px; max-width: 70ch; }
+.page-head h2 { font: 600 30px/1.15 var(--serif); display: inline-flex; align-items: center; gap: 12px; }
+.page-head p { color: var(--ink-2); margin-top: 8px; }
+.muted { color: var(--ink-3); }
+.small { font-size: 13px; }
+.stack { display: grid; gap: 14px; }
+
+/* ---------- participants ---------- */
+.people { max-width: 860px; }
+.prow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 10px; align-items: center; padding: 6px 0; }
+.rowerr { grid-column: 1 / -1; color: var(--cran); font-size: 13px; margin: -2px 0 4px 2px; display: none; }
+.rowerr.on { display: block; }
+.people-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.count { font: 600 15px var(--serif); color: var(--ink-2); margin-bottom: 8px; }
+
+/* ---------- rules ---------- */
+.rules-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 44px; align-items: start; }
+.rsec { padding: 22px 0 6px; border-top: 1px solid var(--line); }
+.rsec:first-child { border-top: 0; padding-top: 0; }
+.rsec-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.rsec h3 { font: 600 19px/1.3 var(--serif); }
+.rsec .desc { color: var(--ink-2); font-size: 14px; margin-top: 2px; max-width: 62ch; }
+.rsec-actions { display: flex; gap: 6px; }
+.rsec h3 { display: inline-flex; align-items: center; gap: 9px; }
+.tip { position: relative; display: inline-flex; font-family: var(--sans); }
+.qm { appearance: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-hi); background: var(--paper); color: var(--ink-3); font: 600 12px/1 var(--sans); cursor: help; padding: 0; display: inline-grid; place-items: center; }
+.qm:hover, .qm:focus-visible, .tip.open .qm { color: var(--accent); border-color: var(--accent); }
+.tipbox { display: none; position: absolute; z-index: 25; left: -6px; top: calc(100% + 8px); width: max-content; max-width: min(320px, 78vw); background: var(--raised); border: 1px solid var(--line-hi); border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.55); padding: 10px 12px; color: var(--ink); font: 400 13.5px/1.5 var(--sans); }
+.tip:hover .tipbox, .tip:focus-within .tipbox, .tip.open .tipbox { display: block; }
+.rlist { margin: 12px 0 8px; display: grid; }
+.rrow { display: flex; align-items: center; gap: 14px; padding: 10px 12px; margin: 0 -12px; border-radius: 10px; flex-wrap: wrap; }
+.rrow:hover { background: var(--paper); }
+.rdesc { flex: 1 1 320px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.rdesc .w { color: var(--ink-2); }
+.rmeta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ract { display: flex; gap: 2px; }
+.empty { color: var(--ink-3); font-size: 14px; padding: 6px 0 10px; }
+.chip { background: var(--accent-weak); color: var(--accent-hover); border: 1px solid rgba(214,181,115,.22); border-radius: 999px; padding: 2px 11px; font-weight: 500; font-size: 14px; }
+.chip.unknown { background: var(--cran-weak); color: var(--cran); text-decoration: underline wavy; }
+.badge { border-radius: 5px; padding: 1px 8px; font-size: 12.5px; font-weight: 500; background: var(--line-soft); color: var(--ink-2); }
+.badge.strong { background: var(--raised); color: var(--ink); }
+.badge.soft { background: var(--straw-bg); color: var(--straw); }
+.switch { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0 8px; cursor: pointer; }
+.switch input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--accent); }
+details.raw { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 14px; }
+details.raw summary { cursor: pointer; font-weight: 500; color: var(--ink-2); }
+details.raw textarea { margin-top: 10px; min-height: 220px; font: 13px/1.5 var(--mono); }
+
+.verdict { position: sticky; top: 112px; border-left: 4px solid var(--line); padding: 2px 0 2px 20px; display: grid; gap: 14px; }
+.verdict.good { border-color: var(--pine); } .verdict.warn { border-color: var(--straw-line); }
+.verdict.bad { border-color: var(--cran); }
+.verdict h3 { font: 600 21px/1.25 var(--serif); }
+.verdict ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
+.verdict .err { color: var(--cran); }
+.verdict h4 { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+table.compiled { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+table.compiled th { text-align: left; font-weight: 600; color: var(--ink-2); padding: 4px 6px 4px 0; border-bottom: 1px solid var(--line); }
+table.compiled td { padding: 4px 6px 4px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.verdict details summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
+
+/* ---------- simulation ---------- */
+.simbar { display: flex; flex-wrap: wrap; gap: 16px 22px; align-items: end; margin-bottom: 8px; }
+.simbar .field { width: 150px; }
+.progress { height: 6px; border-radius: 3px; background: var(--line-soft); overflow: hidden; margin: 14px 0 4px; max-width: 520px; }
+.progress > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 36px; margin: 26px 0 22px; }
+.fact b { display: block; font: 600 30px/1.1 var(--serif); }
+.fact span { color: var(--ink-2); font-size: 14px; }
+.note-line { max-width: 74ch; margin: 6px 0; }
+.note-line.warn { color: var(--straw); }
+.chart-wrap { overflow-x: auto; padding: 4px 0 10px; }
+.chart { --cell: clamp(22px, calc(560px / var(--n)), 46px); display: grid; width: max-content;
+  grid-template-columns: minmax(70px, max-content) repeat(var(--n), var(--cell)); gap: 2px; }
+.chart .colhead { height: var(--head, 108px); display: flex; align-items: flex-end; justify-content: center; font-size: 12.5px; color: var(--ink-2); }
+.chart .colhead span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; max-height: calc(var(--head, 108px) - 4px); overflow: hidden; text-overflow: ellipsis; }
+.chart .rowhead { display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 13px; color: var(--ink-2); height: var(--cell); white-space: nowrap; }
+.chart .corner { font-size: 12px; color: var(--ink-3); display: flex; align-items: flex-end; justify-content: flex-end; padding: 0 8px 4px 0; }
+.cell { height: var(--cell); border-radius: 4px; background: #1A2040; font-size: 12px; display: flex; align-items: center; justify-content: center; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cell.self { background: transparent; box-shadow: inset 0 0 0 1px var(--line-soft); }
+.cell.hard { background: #141A33 repeating-linear-gradient(45deg, rgba(237,232,220,.24) 0 1.5px, transparent 1.5px 6px); }
+.cell.soft { background: var(--straw-bg) radial-gradient(circle, var(--straw-line) 1.3px, transparent 1.6px) 0 0 / 6px 6px; }
+.cell.forced { background: var(--cran-solid); color: #fff; }
+.cell.heat.soft-hit { box-shadow: inset 0 0 0 2px var(--straw-line); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--ink-2); margin-top: 10px; align-items: center; }
+.legend .sw { display: inline-block; width: 18px; height: 18px; border-radius: 4px; vertical-align: -4px; margin-right: 6px; }
+.ramp { background: linear-gradient(90deg, rgba(var(--frost),.12), rgba(var(--frost),1)); }
+.privacy { color: var(--ink-3); font-size: 13px; max-width: 74ch; margin-top: 22px; }
+
+/* ---------- message ---------- */
+.msg-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; align-items: start; }
+.msg-grid textarea { min-height: 330px; font: 14px/1.6 var(--mono); }
+.vars { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; align-items: center; }
+.mail { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 40px rgba(0,0,0,.28); padding: 22px 26px; min-height: 330px; }
+.mail .subj { font: 600 21px/1.3 var(--serif); padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); margin-bottom: 14px; }
+.mail .body { white-space: pre-wrap; font-size: 15px; line-height: 1.6; }
+.mail .to { color: var(--ink-3); font-size: 13px; margin-bottom: 6px; }
+.err-box { color: var(--cran); background: var(--cran-weak); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 14px; }
+
+/* ---------- draw ---------- */
+.draw-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 52px; align-items: start; }
+.draw-grid h3 { font: 600 19px/1.3 var(--serif); margin-bottom: 4px; }
+.banner { background: var(--straw-bg); border-left: 4px solid var(--straw-line); padding: 12px 16px; border-radius: 0 10px 10px 0; margin-bottom: 22px; color: var(--straw); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.banner span { flex: 1 1 260px; }
+.runbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 14px 0; }
+.runbar .field { width: 130px; }
+.console { margin-top: 16px; border: 1px solid var(--line); background: var(--sunken); border-radius: 10px; padding: 12px 16px; display: grid; gap: 4px; font-size: 14px; }
+.console .ln { display: flex; gap: 10px; }
+.console .ln::before { content: ""; flex: 0 0 8px; height: 8px; margin-top: 8px; border-radius: 50%; background: var(--ink-3); }
+.console .ok::before { background: var(--pine); } .console .error::before { background: var(--cran); }
+.console .warn::before, .console .conflict::before { background: var(--straw-line); }
+.console .hint { color: var(--ink-2); }
+.console .preview { margin-left: 18px; padding-left: 12px; border-left: 3px solid var(--line); color: var(--ink-2); white-space: pre-wrap; display: block; }
+.console .preview::before { display: none; }
+.next { margin-top: 12px; color: var(--ink-2); font-size: 14px; }
+code { font: 13px var(--mono); background: var(--line-soft); padding: 1px 6px; border-radius: 4px; }
+.hist { display: grid; margin-top: 10px; }
+.hrow { display: flex; gap: 16px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }
+.hrow .yr { font: 600 24px/1 var(--serif); min-width: 3.4ch; }
+.hrow .info { flex: 1 1 200px; color: var(--ink-2); font-size: 14px; }
+.hrow .info b { font-weight: 500; color: var(--ink); }
+
+/* ---------- dialog + toasts ---------- */
+dialog { border: 1px solid var(--line-hi); border-radius: 16px; padding: 0; width: min(520px, calc(100vw - 32px)); box-shadow: 0 30px 80px rgba(0,0,0,.65); color: var(--ink); background: var(--raised); }
+dialog.wide { width: min(640px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(5,7,16,.68); }
+.dlg-in { padding: 26px 28px 22px; display: grid; gap: 16px; }
+.dlg-in h2 { font: 600 22px/1.25 var(--serif); }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.form-grid { display: grid; gap: 14px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick { appearance: none; border: 1px solid var(--line-hi); background: var(--paper); border-radius: 999px; padding: 4px 13px; cursor: pointer; }
+.pick[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.dlg-in details { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.dlg-in details summary { cursor: pointer; font-weight: 500; }
+.dlg-in details .form-grid { margin-top: 12px; }
+.help { color: var(--ink-3); font-size: 13px; font-weight: 400; }
+.dlg-err { color: var(--cran); font-size: 14px; min-height: 0; }
+#toasts { position: fixed; right: 20px; bottom: 20px; display: grid; gap: 8px; z-index: 50; max-width: min(420px, calc(100vw - 40px)); }
+.toast { background: var(--raised); color: var(--ink); border: 1px solid var(--line-hi); border-radius: 10px; padding: 11px 16px; box-shadow: 0 12px 32px rgba(0,0,0,.5); font-size: 14px; }
+.toast.error { background: var(--cran-solid); border-color: transparent; color: #fff; }
+.toast.good { background: var(--pine-solid); border-color: transparent; color: #fff; }
+
+/* ---------- set switcher ---------- */
+.setwrap { position: relative; padding-bottom: 8px; }
+.setbtn { appearance: none; display: inline-flex; align-items: center; gap: 10px; text-align: left; background: var(--paper); border: 1px solid var(--line-hi); border-radius: 12px; padding: 5px 12px 5px 14px; cursor: pointer; max-width: 300px; }
+.setbtn:hover, .setbtn[aria-expanded="true"] { border-color: var(--accent); }
+.setbtn .t { display: grid; line-height: 1.2; min-width: 0; }
+.setbtn .k { font-size: 11.5px; color: var(--ink-3); }
+.setbtn .v { font: 600 15px var(--serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setbtn svg { flex: none; color: var(--accent); }
+.menu { position: absolute; left: 0; top: calc(100% - 4px); z-index: 30; min-width: 320px; max-width: min(420px, 92vw); background: var(--raised); border: 1px solid var(--line-hi); border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.6); padding: 6px; }
+.mi { appearance: none; display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: baseline; width: 100%; text-align: left; background: none; border: 0; border-radius: 9px; padding: 8px 10px; cursor: pointer; }
+.mi:hover, .mi:focus-visible { background: var(--accent-weak); outline: none; }
+.mi .ck { color: var(--accent); font-weight: 700; }
+.mi .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi .meta { grid-column: 2; font-size: 12.5px; color: var(--ink-3); }
+.bar { position: relative; }
+.optwrap { position: absolute; top: 10px; right: 32px; }
+.status { margin-right: 46px; }
+.optbtn { appearance: none; display: inline-flex; gap: 7px; align-items: center; background: none; border: 1px solid var(--line-hi); border-radius: 9px; padding: 5px 9px; font-size: 15px; cursor: pointer; color: var(--ink-2); font-size: 14px; }
+.optbtn:hover, .optbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--ink); }
+.optbtn .unsafe { color: var(--cran); font-weight: 600; font-size: 12.5px; }
+.menu.right { left: auto; right: 0; min-width: 300px; }
+.mi.check { grid-template-columns: 18px minmax(0, 1fr); }
+.mi .nm.wrap { white-space: normal; }
+.pairs { display: grid; gap: 0; max-height: min(52vh, 420px); overflow: auto; margin: 0 -4px; padding: 0 4px; }
+.pairs .pr { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); align-items: baseline; }
+.pairs .pr .ar { color: var(--accent); text-align: center; }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
+.mi.act { grid-template-columns: minmax(0, 1fr); color: var(--accent-hover); font-weight: 500; }
+
+/* ---------- set manager + welcome ---------- */
+.setlist { display: grid; gap: 2px; max-height: min(52vh, 420px); overflow: auto; margin: 0 -8px; padding: 0 8px; }
+.srow { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.srow .who { flex: 1 1 220px; min-width: 0; }
+.srow .who b { font: 600 17px var(--serif); display: block; overflow: hidden; text-overflow: ellipsis; }
+.srow .who span { color: var(--ink-3); font-size: 13px; }
+.srow .cur { font-size: 12.5px; color: var(--accent); border: 1px solid rgba(214,181,115,.4); border-radius: 999px; padding: 1px 9px; }
+.srow .acts { display: flex; gap: 2px; flex-wrap: wrap; }
+.welcome { max-width: 560px; margin: 8vh auto 0; display: grid; gap: 16px; }
+.welcome h2 { font: 600 32px/1.15 var(--serif); }
+.welcome p { color: var(--ink-2); }
+.welcome .row { display: flex; gap: 10px; }
+.radio-line { display: flex; gap: 10px; align-items: baseline; }
+.radio-line input { accent-color: var(--accent); }
+
+@media (max-width: 980px) {
+  .rules-layout, .msg-grid, .draw-grid { grid-template-columns: 1fr; gap: 30px; }
+  .verdict { position: static; order: -1; }
+  .bar, main { padding-left: 18px; padding-right: 18px; }
+  .prow { grid-template-columns: 1fr; }
+  .status { margin-left: 0; width: 100%; }
+  .bar { position: relative; }
+  .setwrap { position: static; }
+  .optwrap { position: static; padding-bottom: 8px; }
+  .status { margin-right: 0; }
+  .menu.right { left: 18px; right: 18px; min-width: 0; }
+  .menu { left: 18px; right: 18px; top: 100%; width: auto; min-width: 0; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <div class="brand"><h1><span class="logo" aria-hidden="true">🎁</span> Père Noël secret</h1></div>
+    <div class="setwrap" id="setwrap"></div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
+    <div class="status" id="status"></div>
+    <div class="optwrap" id="optwrap"></div>
+  </div>
+</header>
+<main id="panel" role="tabpanel" aria-live="off"></main>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+
+/* ================================================================
+   Helpers
+================================================================ */
+const $ = (sel, root = document) => root.querySelector(sel);
+
+/** Tiny DOM builder. Text goes through createTextNode, never innerHTML,
+    so names read from the files can't inject markup. */
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k in el) el[k] = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  el.append(...kids.flat(Infinity).filter(k => k !== null && k !== undefined && k !== false));
+  return el;
+}
+const clone = x => JSON.parse(JSON.stringify(x));
+const s = n => (n > 1 ? "s" : "");           // French plural: 0 and 1 are singular
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+async function api(path, body) {
+  const headers = { "X-Santa-Token": TOKEN };
+  if (S.setId && !path.startsWith("/api/sets")) headers["X-Santa-Set"] = encodeURIComponent(S.setId);
+  const opts = body === undefined
+    ? { headers }
+    : { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  try {
+    const r = await fetch(path, opts);
+    const data = await r.json().catch(() => ({ ok: false, error: "Réponse illisible du serveur." }));
+    if (!r.ok && data.ok === undefined) data.ok = false;
+    data._status = r.status;
+    return data;
+  } catch (e) {
+    return { ok: false, error: "Le serveur ne répond plus. Relancez webui.py puis rechargez la page." };
+  }
+}
+
+function toast(msg, kind = "") {
+  const t = h("div", { class: "toast " + kind }, msg);
+  $("#toasts").append(t);
+  setTimeout(() => t.remove(), kind === "error" ? 9000 : 4200);
+}
+
+/** Shared modal. Resolves with the chosen action's value (undefined on Escape).
+    An action's onClick may return false to keep the dialog open.
+    Each call builds its own <dialog>, so one can open on top of another. */
+let dlgSeq = 0;
+function openDialog({ title, content, actions, wide = false }) {
+  return new Promise(resolve => {
+    const id = "dlgTitle" + ++dlgSeq;
+    const bar = h("div", { class: "dlg-actions" });
+    const dlg = h("dialog", { class: wide ? "wide" : "", "aria-labelledby": id },
+      h("div", { class: "dlg-in" }, h("h2", { id }, title), content, bar));
+    let result;
+    dlg.addEventListener("close", () => { dlg.remove(); resolve(result); });
+    for (const a of actions) {
+      bar.append(h("button", { type: "button", class: "btn " + (a.kind || "ghost"), onclick: async () => {
+        if (a.onClick && (await a.onClick()) === false) return;
+        result = a.value; dlg.close();
+      } }, a.label));
+    }
+    document.body.append(dlg);
+    dlg.showModal();
+    const first = dlg.querySelector("input:not([type=checkbox]):not([type=radio]), select, textarea");
+    if (first) first.focus();
+  });
+}
+const confirmDialog = ({ title, text, label, danger }) => openDialog({
+  title, content: h("p", {}, text),
+  actions: [{ label: "Annuler", value: false }, { label, kind: danger ? "solid-danger" : "primary", value: true }],
+}).then(v => v === true);
+
+/* ================================================================
+   State
+================================================================ */
+const TABS = [["participants", "Participants"], ["rules", "Règles"], ["sim", "Simulation"], ["message", "Message"], ["draw", "Tirage"]];
+const KNOWN_RULE_KEYS = ["forbidden", "forced", "couples", "groups", "history", "settings"];
+
+const S = {
+  tab: "rules", year: new Date().getFullYear(), setId: null, sets: [], epoch: 0, root: "",
+  defaults: { priority: { force: 100, forbid: 50, history: 10 }, variables: ["santa", "recipient", "year"] },
+  participants: [],            // { name, email, prev }  (prev = name as last committed, for renames)
+  rules: normalizeRules({}),
+  template: "", templateExists: true,
+  saved: { p: "", r: "", t: "" },
+  history: [],
+  unsafe: false,               // opt-in: lets the History section show past pairs. Never persisted.
+  validation: null,
+  sim: { running: false, stop: false, total: 100, agg: null, error: null },
+  draw: { busy: false, lines: null, kind: null, ok: null },
+  preview: null,
+};
+
+/* ---------- rules: raw JSON <-> editable form ---------- */
+function normalizeRules(raw) {
+  raw = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const r = { extra: {} };
+  for (const k of Object.keys(raw)) if (!KNOWN_RULE_KEYS.includes(k)) r.extra[k] = raw[k];
+  const pairs = a => (Array.isArray(a) ? a : []).map(x => ({ ...x }));
+  const groups = a => (Array.isArray(a) ? a : []).map(x => Array.isArray(x) ? { members: [...x] } : { ...x, members: [...(x.members || [])] });
+  r.forbidden = pairs(raw.forbidden); r.forced = pairs(raw.forced);
+  r.couples = groups(raw.couples); r.groups = groups(raw.groups);
+  r.history = raw.history && typeof raw.history === "object" ? { ...raw.history } : null;
+  r.settings = { ...(raw.settings || {}) };
+  return r;
+}
+function serializeRules(r) {
+  const clean = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== ""));
+  const compact = o => { const c = clean(o); return Object.keys(c).length === 1 ? c.members : c; };
+  const out = { ...r.extra };
+  if (r.forbidden.length) out.forbidden = r.forbidden.map(clean);
+  if (r.forced.length) out.forced = r.forced.map(clean);
+  if (r.couples.length) out.couples = r.couples.map(compact);
+  if (r.groups.length) out.groups = r.groups.map(compact);
+  if (r.history) out.history = clean(r.history);
+  const st = clean(r.settings); if (Object.keys(st).length) out.settings = st;
+  return out;
+}
+/** What goes to the server. The id (never shown) is what keeps a person recognisable across renames. */
+const serPeople = () => S.participants.map(p => ({ ...(p.id ? { id: p.id } : {}), name: p.name.trim(), email: p.email.trim() }));
+const normTemplate = t => t.replace(/\r\n/g, "\n").replace(/\n+$/, "") + "\n";
+const snap = () => ({ p: JSON.stringify(serPeople()), r: JSON.stringify(serializeRules(S.rules)), t: normTemplate(S.template) });
+function dirtyParts() { const n = snap(); return { p: n.p !== S.saved.p, r: n.r !== S.saved.r, t: n.t !== S.saved.t }; }
+const isDirty = () => Object.values(dirtyParts()).some(Boolean);
+const names = () => S.participants.map(p => p.name.trim()).filter(Boolean);
+
+/* ================================================================
+   Loading, saving, validating
+================================================================ */
+async function load() {
+  const epoch = S.epoch, st = await api("/api/state");
+  if (epoch !== S.epoch) return;
+  if (st._status === 404 && st.code === "no_set") { await refreshSets(); await pickInitialSet(); return; }
+  if (!st.ok) { $("#panel").replaceChildren(h("div", { class: "err-box" }, st.error || "Impossible de charger l'état.")); return; }
+  S.participants = st.participants.map(p => ({ id: p.id || undefined, name: p.name || "", email: p.email || "", prev: p.name || "" }));
+  S.rules = normalizeRules(st.rules);
+  S.template = st.template.text; S.templateExists = st.template.exists;
+  S.history = st.history; S.year = st.year;
+  S.defaults = st.defaults;
+  S.saved = snap();
+  const fromHash = location.hash.slice(1);
+  S.tab = TABS.some(t => t[0] === fromHash) ? fromHash : (S.participants.length ? "rules" : "participants");
+  S.validation = null; S.preview = null;
+  if (st.upgraded) toast("Cet ensemble vient d'être mis à jour" + (st.upgraded.ids_added ? " : identifiants ajoutés aux participants" : "") + (st.upgraded.history_converted.length ? ", historique converti" : "") + ". Les anciennes versions sont conservées en .bak.");
+  renderAll();
+  runValidate();
+}
+
+async function save() {
+  // Ctrl+S inside a name field: commit the pending rename (it fires on blur) so the rules follow before we validate.
+  const focused = document.activeElement;
+  if (focused && focused.closest && focused.closest(".prow")) focused.blur();
+  const d = dirtyParts();
+  if (!(d.p || d.r || d.t)) return;
+  const body = { year: S.year };
+  if (d.p) body.participants = serPeople();
+  if (d.r) body.rules = serializeRules(S.rules);
+  if (d.t) body.template = S.template;
+  const res = await api("/api/save", body);
+  if (!res.ok) { toast(res.error || "L'enregistrement a échoué.", "error"); return; }
+  if (d.p) S.participants.forEach((p, i) => { const sp = res.state.participants[i]; if (sp && sp.id) p.id = sp.id; });   // new rows received their id
+  const now = snap();
+  if (d.p) S.saved.p = now.p; if (d.r) S.saved.r = now.r; if (d.t) { S.saved.t = now.t; S.templateExists = true; }
+  S.history = res.state.history;
+  const labels = { "participants.json": "participants", "rules.json": "règles", "message.txt": "message" };
+  toast("Enregistré : " + res.saved.map(f => labels[f] || f).join(", ") + ".", "good");
+  renderAll(); runValidate();
+}
+
+let validateSeq = 0;
+const scheduleValidate = debounce(() => runValidate(), 350);
+async function runValidate() {
+  const seq = ++validateSeq, epoch = S.epoch;
+  const res = await api("/api/validate", { participants: serPeople(), rules: serializeRules(S.rules), year: S.year });
+  if (seq !== validateSeq || epoch !== S.epoch) return;   // a newer request, or another set, took over
+  S.validation = res.errors ? res : { ok: false, errors: [res.error || "Vérification impossible."], notes: [], infos: [], violations: [], summary: [], hard: 0, soft: 0, feasible: null };
+  renderHeader();
+  if (S.tab === "rules") renderVerdictInto($("#verdict"));
+}
+
+/** Called after any edit: refresh dirty markers without rebuilding the panel. */
+function afterEdit() { renderHeader(); }
+
+/* ================================================================
+   Header
+================================================================ */
+function verdictTone() {
+  const v = S.validation;
+  if (!v) return { tone: "idle", text: "Vérification…" };
+  if (!v.ok) return { tone: "bad", text: "Règles à corriger" };
+  if (v.feasible === false) return { tone: "bad", text: "Aucun tirage possible" };
+  if (v.violations.length) return { tone: "warn", text: "Possible, avec concessions" };
+  return { tone: "good", text: "Règles valides" };
+}
+/* ---------- options menu and unsafe mode ---------- */
+let optSig = "";
+function renderOptions() {
+  const wrap = $("#optwrap"); if (!wrap) return;
+  const sig = String(S.unsafe); if (sig === optSig && wrap.firstChild) return;
+  optSig = sig; closeMenu();
+  wrap.replaceChildren(h("button", { class: "optbtn", "aria-haspopup": "menu", "aria-expanded": "false", title: "Options", "aria-label": "Options", onclick: toggleOptions },
+    h("span", { "aria-hidden": "true" }, "⚙️"), S.unsafe ? h("span", { class: "unsafe" }, "mode non sécurisé") : null));
+}
+function toggleOptions() {
+  if (menuEl) { const was = menuEl.classList.contains("right"); closeMenu(); if (was) return; }
+  const btn = $(".optbtn"); btn.setAttribute("aria-expanded", "true");
+  menuEl = h("div", { class: "menu right", role: "menu", "aria-label": "Options" },
+    h("button", { class: "mi check", role: "menuitemcheckbox", "aria-checked": String(S.unsafe), onclick: toggleUnsafe },
+      h("span", { class: "ck", "aria-hidden": "true" }, S.unsafe ? "✓" : ""), h("span", { class: "nm wrap" }, "Mode non sécurisé"),
+      h("span", { class: "meta" }, "Afficher qui a tiré qui lors des années passées (section Tirage).")));
+  $("#optwrap").append(menuEl);
+  const item = menuEl.querySelector(".mi"); item.focus();
+  menuEl.addEventListener("keydown", e => { if (e.key === "Escape") { e.stopPropagation(); closeMenu(); btn.focus(); } });
+}
+async function toggleUnsafe() {
+  closeMenu();
+  if (S.unsafe) { S.unsafe = false; renderAll(); toast("Mode non sécurisé désactivé."); return; }
+  const ok = await confirmDialog({ title: "Activer le mode non sécurisé ?", label: "Activer", danger: true,
+    text: "Les tirages des années passées pourront être affichés avec leurs paires : qui offrait à qui. Si vous participez au tirage, ou si quelqu'un regarde votre écran, une partie du secret disparaît. Le tirage de l'année en cours reste caché. Le mode se désactive de lui-même au rechargement de la page." });
+  if (!ok) return;
+  S.unsafe = true; renderAll(); toast("Mode non sécurisé activé : les tirages passés ont un bouton « Voir ».", "error");
+}
+async function viewDraw(year) {
+  const res = await api("/api/history/read", { year, unsafe: true });
+  if (!res.ok) return toast(res.error, "error");
+  const relaxed = (res.relaxed_rules || []).map(r => typeof r === "string" ? r : `${r.source} (${r.violations})`);
+  openDialog({ title: `Tirage ${year}`, wide: true,
+    content: h("div", { class: "form-grid" },
+      h("p", { class: "help" }, `${plural(res.pairs.length, "paire", "paires")}, ${res.imported ? "importé" : "généré" + (res.generated_at ? " le " + res.generated_at.replace("T", " à ").slice(0, 18) : "")}.` + (relaxed.length ? " Concessions : " + relaxed.join(", ") + "." : "")),
+      h("div", { class: "pairs" }, ...res.pairs.map(p => h("div", { class: "pr" }, h("span", {}, p.from), h("span", { class: "ar", "aria-hidden": "true" }, "→"), h("span", {}, p.to))))),
+    actions: [{ label: "Fermer", kind: "primary", value: true }] });
+}
+function renderHeader() {
+  renderOptions();
+  const d = dirtyParts(), dirty = d.p || d.r || d.t;
+  const flags = S.setId ? { participants: d.p, rules: d.r, message: d.t } : {};
+  renderSetSwitcher();
+  $("#tabs").replaceChildren(...TABS.map(([id, label]) => h("button", {
+    class: "tab", role: "tab", id: "tab-" + id, "aria-selected": String(S.tab === id && !!S.setId), disabled: !S.setId, onclick: () => go(id),
+  }, label, flags[id] ? h("span", { class: "dot", title: "Modifications non enregistrées", role: "img", "aria-label": "modifications non enregistrées" }) : null)));
+  const v = verdictTone();
+  if (!S.setId) { $("#status").replaceChildren(); return; }
+  $("#status").replaceChildren(...[
+    h("button", { class: "pill " + v.tone, onclick: () => go("rules"), title: "Voir le détail dans Règles" }, v.text),
+    dirty ? null : h("span", { class: "saved-note" }, "Tout est enregistré"),
+    dirty ? h("button", { class: "btn primary", onclick: save, title: "Ctrl+S" }, "Enregistrer") : null,
+  ].filter(Boolean));
+}
+function go(tab) {
+  S.tab = tab; history.replaceState(null, "", "#" + tab);
+  renderAll();
+  if (tab === "message") refreshPreview();
+}
+function renderAll() { renderHeader(); renderPanel(); }
+function renderPanel() {
+  const p = $("#panel"); p.replaceChildren();
+  if (!S.setId) return renderWelcome(p);
+  ({ participants: renderParticipants, rules: renderRules, sim: renderSim, message: renderMessage, draw: renderDraw })[S.tab](p);
+}
+const pageHead = (title, sub) => h("div", { class: "page-head" }, h("h2", {}, title), h("p", {}, sub));
+/** A small "?" that explains something on hover or keyboard focus (and on tap). */
+let tipSeq = 0;
+function tip(text) {
+  const id = "tip" + ++tipSeq;
+  const box = h("span", { class: "tipbox", role: "tooltip", id }, text);
+  const btn = h("button", { type: "button", class: "qm", "aria-label": "Explication", "aria-describedby": id,
+    onclick: e => { e.preventDefault(); e.currentTarget.parentNode.classList.toggle("open"); },
+    onkeydown: e => { if (e.key === "Escape") e.currentTarget.parentNode.classList.remove("open"); } }, "?");
+  return h("span", { class: "tip" }, btn, box);
+}
+document.addEventListener("click", e => { document.querySelectorAll(".tip.open").forEach(t => { if (!t.contains(e.target)) t.classList.remove("open"); }); });
+
+/* ================================================================
+   Participants
+================================================================ */
+function personErrors() {
+  const seen = new Set();
+  return S.participants.map(p => {
+    const e = [], n = p.name.trim();
+    if (!n) e.push("Le nom est vide.");
+    else {
+      if (/[\\\/\x00-\x1f]/.test(n) || n.startsWith(".")) e.push("Pas de « / » ni de « \\ », et pas de point au début : le nom sert aussi de nom de fichier.");
+      if (seen.has(n)) e.push("Ce nom existe déjà : chaque nom doit être unique."); else seen.add(n);
+    }
+    if (!/^[^@\s]+@[^@\s]+$/.test(p.email.trim())) e.push("Adresse e-mail invalide.");
+    return e;
+  });
+}
+function refreshRowErrors() {
+  const errs = personErrors();
+  document.querySelectorAll(".prow").forEach((row, i) => {
+    const box = row.querySelector(".rowerr");
+    box.textContent = (errs[i] || []).join(" "); box.classList.toggle("on", !!(errs[i] || []).length);
+    const [n, m] = row.querySelectorAll("input");
+    n.classList.toggle("bad", !S.participants[i].name.trim() || (errs[i] || []).some(x => /nom/i.test(x)));
+    m.classList.toggle("bad", (errs[i] || []).some(x => /e-mail/.test(x)));
+  });
+}
+function renderParticipants(panel) {
+  panel.append(pageHead("Participants", "Les personnes qui offrent et reçoivent un cadeau. Chaque nom est unique : les règles s'y réfèrent."));
+  const box = h("div", { class: "people" });
+  box.append(h("div", { class: "count" }, `${S.participants.length} personne${s(S.participants.length)}`));
+  S.participants.forEach((p, i) => box.append(h("div", { class: "prow" },
+    h("input", { class: "in", value: p.name, placeholder: "Nom", "aria-label": `Nom du participant ${i + 1}`, autocomplete: "off",
+      oninput: e => { p.name = e.target.value; afterEdit(); refreshRowErrors(); },
+      onchange: () => commitName(p) }),
+    h("input", { class: "in", type: "email", value: p.email, placeholder: "adresse@exemple.org", "aria-label": `E-mail du participant ${i + 1}`,
+      oninput: e => { p.email = e.target.value; afterEdit(); refreshRowErrors(); },
+      onchange: () => scheduleValidate() }),
+    h("button", { class: "btn ghost danger", onclick: () => removePerson(i), "aria-label": `Retirer ${p.name || "ce participant"}` }, "Retirer"),
+    h("div", { class: "rowerr", role: "alert" }),
+  )));
+  if (!S.participants.length) box.append(h("p", { class: "empty" }, "Personne pour l'instant. Ajoutez au moins deux participants, ou collez une liste « Nom, e-mail »."));
+  box.append(h("div", { class: "people-actions" },
+    h("button", { class: "btn line", onclick: addPerson }, "Ajouter une personne"),
+    h("button", { class: "btn line", onclick: pasteDialog }, "Coller une liste"),
+  ));
+  panel.append(box);
+  refreshRowErrors();
+}
+function addPerson() {
+  S.participants.push({ name: "", email: "", prev: "" });
+  renderPanel(); afterEdit();
+  const rows = document.querySelectorAll(".prow"); rows[rows.length - 1].querySelector("input").focus();
+}
+/** After a name is edited: carry the rename into the rules that mention it. */
+function commitName(p) {
+  const old = p.prev, now = p.name.trim();
+  if (old && now && old !== now) {
+    const n = renameInRules(old, now);
+    if (n) toast(`« ${old} » devient « ${now} » dans ${n} règle${s(n)}.`);
+  }
+  p.prev = now;
+  afterEdit(); scheduleValidate();
+}
+function eachRule(fn) {
+  S.rules.forbidden.forEach(r => fn("pair", r)); S.rules.forced.forEach(r => fn("pair", r));
+  S.rules.couples.forEach(r => fn("members", r)); S.rules.groups.forEach(r => fn("members", r));
+}
+function renameInRules(old, now) {
+  let n = 0;
+  eachRule((kind, r) => {
+    if (kind === "pair") { let hit = false; if (r.from === old) { r.from = now; hit = true; } if (r.to === old) { r.to = now; hit = true; } n += hit; }
+    else if (r.members.includes(old)) { r.members = r.members.map(m => m === old ? now : m); n++; }
+  });
+  return n;
+}
+function rulesMentioning(name) {
+  let n = 0;
+  eachRule((kind, r) => { if (kind === "pair" ? (r.from === name || r.to === name) : r.members.includes(name)) n++; });
+  return n;
+}
+async function removePerson(i) {
+  const p = S.participants[i], name = p.name.trim(), n = name ? rulesMentioning(name) : 0;
+  if (n) {
+    const ok = await confirmDialog({
+      title: `Retirer ${name} ?`, label: "Retirer et mettre à jour les règles", danger: true,
+      text: `${name} apparaît dans ${n} règle${s(n)}. Elle${s(n)} seront modifiée${s(n)} : les paires et les couples qui le concernent sont supprimés, et un groupe qui passerait sous 2 personnes disparaît.`,
+    });
+    if (!ok) return;
+    const R = S.rules;
+    R.forbidden = R.forbidden.filter(r => r.from !== name && r.to !== name);
+    R.forced = R.forced.filter(r => r.from !== name && r.to !== name);
+    R.couples = R.couples.filter(r => !r.members.includes(name));
+    R.groups.forEach(r => { r.members = r.members.filter(m => m !== name); });
+    R.groups = R.groups.filter(r => r.members.length >= 2);
+  }
+  S.participants.splice(i, 1);
+  renderAll(); scheduleValidate();
+}
+function pasteDialog() {
+  const ta = h("textarea", { class: "in", rows: 8, placeholder: "Alice, alice@exemple.org\nBob <bob@exemple.org>" });
+  const err = h("div", { class: "dlg-err", role: "alert" });
+  openDialog({
+    title: "Coller une liste", wide: true,
+    content: h("div", { class: "form-grid" }, h("p", { class: "help" }, "Une personne par ligne : « Nom, e-mail » ou « Nom <e-mail> »."), ta, err),
+    actions: [{ label: "Annuler", value: false }, { label: "Ajouter", kind: "primary", value: true, onClick: () => {
+      const rows = [], bad = [];
+      for (const line of ta.value.split("\n").map(l => l.trim()).filter(Boolean)) {
+        const m = line.match(/^(.*?)[\s,;\t]*<?([^\s,;<>]+@[^\s,;<>]+)>?$/);
+        if (!m) { bad.push(line); continue; }
+        rows.push({ name: m[1].trim() || m[2].split("@")[0], email: m[2], prev: "" });
+      }
+      if (bad.length) { err.textContent = `Ligne illisible : « ${bad[0]} ».`; return false; }
+      if (!rows.length) { err.textContent = "Rien à ajouter."; return false; }
+      S.participants.push(...rows); renderAll(); scheduleValidate();
+    } }],
+  });
+}
+
+/* ================================================================
+   Rules
+================================================================ */
+const chip = name => h("span", { class: "chip" + (names().includes(name) ? "" : " unknown"), title: names().includes(name) ? null : "Ce participant n'existe pas" }, name);
+const word = t => h("span", { class: "w" }, t);
+
+function effective(type, r) {
+  const D = S.defaults.priority;
+  const base = type === "forced" ? D.force : type === "history" ? D.history : D.forbid;
+  return {
+    priority: r.priority ?? base, prioExplicit: r.priority !== undefined,
+    soft: "soft" in r ? !!r.soft : type === "history", softExplicit: "soft" in r,
+    relax: r.relax || (type === "history" ? "pair" : "rule"),
+  };
+}
+function describe(type, r) {
+  const pl = (n, w) => `${n} ${w}${s(n)}`;
+  if (type === "forbidden") return [chip(r.from), word("ne tire jamais"), chip(r.to)];
+  if (type === "forced") return [chip(r.from), word("tire"), chip(r.to)];
+  if (type === "couple") return [...r.members.flatMap((m, i) => [i ? word("et") : null, chip(m)]), word("ne se tirent pas")];
+  if (type === "group") return [...r.members.map(chip), word("ne se tirent pas entre eux")];
+  const past = S.history.map(x => x.year).filter(y => y !== null && y < S.year);
+  const avail = past.length ? `Tirages disponibles : ${past.join(", ")}.` : "Aucun tirage enregistré pour l'instant : cette règle ne change encore rien.";
+  return [word(`Ne pas répéter ${r.last > 1 ? "les " + r.last + " derniers tirages" : "le dernier tirage"}.`), h("span", { class: "muted small" }, avail)];
+}
+function badges(type, r) {
+  const e = effective(type, r), out = [];
+  out.push(h("span", { class: "badge" + (e.prioExplicit ? " strong" : ""), title: "En cas de conflit sur la même paire, la priorité la plus haute l'emporte." }, `priorité ${e.priority}`));
+  if (e.soft) out.push(h("span", { class: "badge soft", title: "Peut être violée si aucun tirage n'est possible autrement." }, "souple"));
+  else if (e.softExplicit && type === "history") out.push(h("span", { class: "badge", title: "Ne sera jamais violée." }, "stricte"));
+  const multi = type === "couple" || type === "group" || type === "history";
+  const dflt = type === "history" ? "pair" : "rule";
+  if (multi && e.soft && e.relax !== dflt) out.push(h("span", { class: "badge", title: "Ce qui est sacrifié quand la règle doit céder." }, e.relax === "pair" ? "paire par paire" : "en bloc"));
+  return out;
+}
+function ruleRow(type, idx, r) {
+  return h("div", { class: "rrow" },
+    h("div", { class: "rdesc" }, describe(type, r)),
+    h("div", { class: "rmeta" }, badges(type, r)),
+    h("div", { class: "ract" },
+      h("button", { class: "btn ghost small", onclick: () => openRuleDialog(type, idx), "aria-label": "Modifier cette règle" }, "Modifier"),
+      h("button", { class: "btn ghost danger small", onclick: () => deleteRule(type, idx), "aria-label": "Supprimer cette règle" }, "Supprimer")));
+}
+function deleteRule(type, idx) {
+  if (type === "history") S.rules.history = null; else listFor(type).splice(idx, 1);
+  touchRules();
+}
+const listFor = type => ({ forbidden: S.rules.forbidden, forced: S.rules.forced, couple: S.rules.couples, group: S.rules.groups })[type];
+function touchRules() { renderAll(); scheduleValidate(); }
+
+function ruleSection(title, desc, actions, rows, emptyText) {
+  return h("section", { class: "rsec" },
+    h("div", { class: "rsec-head" }, h("h3", {}, title, tip(desc)), h("div", { class: "rsec-actions" }, actions)),
+    h("div", { class: "rlist" }, rows.length ? rows : h("p", { class: "empty" }, emptyText)));
+}
+const addBtn = (label, fn) => h("button", { class: "btn line small", onclick: fn }, label);
+
+function renderRules(panel) {
+  panel.append(h("div", { class: "page-head" }, h("h2", {}, "Règles", tip("Ce qui doit, ou ne doit pas, arriver dans le tirage. Chaque règle peut avoir une priorité et être déclarée souple."))));
+  const R = S.rules;
+  const main = h("div", {},
+    ruleSection("Couples et groupes", "Des personnes qui ne se tirent pas entre elles : un couple, une famille, une colocation.",
+      [addBtn("Ajouter un couple", () => openRuleDialog("couple")), addBtn("Ajouter un groupe", () => openRuleDialog("group"))],
+      [...R.couples.map((r, i) => ruleRow("couple", i, r)), ...R.groups.map((r, i) => ruleRow("group", i, r))], "Aucun couple ni groupe."),
+    ruleSection("Paires interdites", "Une personne ne tire jamais une autre, dans ce sens seulement.",
+      [addBtn("Ajouter une paire", () => openRuleDialog("forbidden"))], R.forbidden.map((r, i) => ruleRow("forbidden", i, r)), "Aucune paire interdite."),
+    ruleSection("Paires imposées", "Une personne tire forcément une autre. Utile pour un cadeau surprise.",
+      [addBtn("Ajouter une paire", () => openRuleDialog("forced"))], R.forced.map((r, i) => ruleRow("forced", i, r)), "Aucune paire imposée."),
+    ruleSection("Historique", "Éviter de retomber sur les mêmes paires que les années précédentes.",
+      R.history ? [] : [addBtn("Éviter les tirages passés", () => openRuleDialog("history"))],
+      R.history ? [ruleRow("history", 0, R.history)] : [], "Pas de règle d'historique : les paires des années passées peuvent revenir."),
+    h("section", { class: "rsec" },
+      h("label", { class: "switch" },
+        h("input", { type: "checkbox", checked: !!R.settings.single_cycle, onchange: e => { if (e.target.checked) R.settings.single_cycle = true; else delete R.settings.single_cycle; touchRules(); } }),
+        h("h3", {}, "Boucle unique", tip("Le tirage forme une seule boucle (A offre à B, B à C, …, puis retour à A). Personne ne se tire mutuellement."))),
+    ),
+    rawEditor(),
+  );
+  panel.append(h("div", { class: "rules-layout" }, main, h("aside", { id: "verdict", "aria-label": "Verdict sur les règles" })));
+  renderVerdictInto($("#verdict"));
+}
+function rawEditor() {
+  const ta = h("textarea", { class: "in", spellcheck: false, "aria-label": "Règles au format JSON" }, JSON.stringify(serializeRules(S.rules), null, 2));
+  const err = h("div", { class: "dlg-err", role: "alert" });
+  return h("details", { class: "raw" }, h("summary", {}, "Voir ou modifier le JSON"),
+    h("p", { class: "help", style: "margin-top:8px" }, "C'est le contenu de rules.json. Appliquez pour le recharger dans la page, puis enregistrez."),
+    ta, err,
+    h("div", { style: "margin-top:8px" }, h("button", { class: "btn line small", onclick: () => {
+      try { const o = JSON.parse(ta.value); if (!o || typeof o !== "object" || Array.isArray(o)) throw new Error("Un objet JSON est attendu."); S.rules = normalizeRules(o); touchRules(); }
+      catch (e) { err.textContent = "JSON invalide : " + e.message; }
+    } }, "Appliquer")));
+}
+
+/* ---------- verdict panel ---------- */
+function renderVerdictInto(el) {
+  if (!el) return;
+  const v = S.validation, t = verdictTone();
+  el.className = "verdict " + t.tone; el.replaceChildren();
+  if (!v) { el.append(h("h3", {}, "Vérification…")); return; }
+  if (!v.ok) {
+    el.append(h("h3", {}, "Une règle pose problème"), h("ul", {}, v.errors.map(e => h("li", { class: "err" }, e))));
+    return;
+  }
+  if (v.feasible === false) el.append(h("h3", {}, "Aucun tirage n'est possible"), h("p", {}, "Les règles strictes se contredisent ou ne laissent aucune solution. Rendez-en certaines souples, ou retirez-en."));
+  else if (v.violations.length) el.append(h("h3", {}, "Possible, avec des concessions"), h("p", {}, "Pour qu'un tirage existe, ces règles souples seront violées au minimum :"),
+    h("ul", {}, v.violations.map(x => h("li", {}, `${x.source} : ${x.count} violation${s(x.count)}`))));
+  else el.append(h("h3", {}, "Les règles sont cohérentes"), h("p", {}, "Un tirage qui respecte toutes les règles existe."));
+  el.append(h("p", { class: "small muted" }, `${v.hard + v.soft} contrainte${s(v.hard + v.soft)} sur des paires : ${v.hard} stricte${s(v.hard)}, ${v.soft} souple${s(v.soft)}.`));
+  if (v.notes.length) el.append(h("div", {}, h("h4", {}, "Conflits réglés par la priorité"), h("ul", {}, v.notes.map(n => h("li", {}, n)))));
+  if (v.infos.length) el.append(h("p", { class: "small muted" }, v.infos.join(" ")));
+  if (v.summary.length) el.append(h("details", {}, h("summary", {}, "Règles telles que le programme les voit"),
+    h("table", { class: "compiled" }, h("thead", {}, h("tr", {}, ...["Source", "Priorité", "Type", "Paires"].map(c => h("th", {}, c)))),
+      h("tbody", {}, v.summary.map(g => h("tr", {}, h("td", {}, g.source), h("td", {}, g.priority), h("td", {}, (g.kind === "force" ? "imposée" : "interdite") + (g.soft ? ", souple" : ", stricte")), h("td", {}, g.count)))))));
+  el.append(h("div", {}, h("button", { class: "btn line", onclick: () => go("sim") }, "Simuler ces règles")));
+}
+
+/* ---------- rule dialog ---------- */
+function openRuleDialog(type, idx = null) {
+  const editing = idx !== null;
+  const src = editing ? (type === "history" ? S.rules.history : listFor(type)[idx]) : null;
+  const D = S.defaults.priority, base = type === "forced" ? D.force : type === "history" ? D.history : D.forbid;
+  const F = {
+    a: src?.from ?? src?.members?.[0] ?? "", b: src?.to ?? src?.members?.[1] ?? "",
+    members: [...(src?.members ?? [])], last: src?.last ?? 1,
+    priority: src?.priority ?? "", soft: src && "soft" in src ? (src.soft ? "yes" : "no") : "default",
+    relax: src?.relax ?? "default",
+  };
+  const titles = { forbidden: "paire interdite", forced: "paire imposée", couple: "couple", group: "groupe", history: "règle d'historique" };
+  const roster = names();
+  const select = (key, label) => h("label", { class: "field" }, label,
+    h("select", { class: "in", onchange: e => { F[key] = e.target.value; } },
+      h("option", { value: "" }, "Choisir…"), ...roster.map(n => h("option", { value: n, selected: n === F[key] }, n))));
+  const body = h("div", { class: "form-grid" });
+
+  if (type === "forbidden" || type === "forced") body.append(h("div", { class: "two" }, select("a", "Donneur"), select("b", "Receveur")));
+  if (type === "couple") body.append(h("div", { class: "two" }, select("a", "Première personne"), select("b", "Deuxième personne")));
+  if (type === "group") {
+    const picks = h("div", { class: "picks" });
+    const draw = () => picks.replaceChildren(...roster.map(n => h("button", { type: "button", class: "pick", "aria-pressed": String(F.members.includes(n)),
+      onclick: () => { F.members = F.members.includes(n) ? F.members.filter(m => m !== n) : [...F.members, n]; draw(); } }, n)));
+    draw(); body.append(h("div", { class: "field" }, "Membres du groupe (au moins 2)", picks));
+  }
+  if (type === "history") {
+    const past = S.history.map(x => x.year).filter(y => y !== null && y < S.year);
+    body.append(h("label", { class: "field" }, "Nombre de tirages passés à éviter",
+      h("input", { class: "in", type: "number", min: 1, step: 1, value: String(F.last), oninput: e => { F.last = e.target.value; } }),
+      h("span", { class: "help" }, past.length ? `Tirages enregistrés avant ${S.year} : ${past.join(", ")}.` : "Aucun tirage enregistré pour l'instant. Vous pouvez en importer dans l'onglet Tirage.")));
+  }
+
+  const opt = (label, value, key) => h("label", { style: "display:flex;gap:6px;align-items:center;font-weight:400" },
+    h("input", { type: "radio", name: "soft-" + key, value, checked: F.soft === value, onchange: () => { F.soft = value; } }), label);
+  const dflt = type === "history" ? "souple" : "stricte";
+  const adv = h("details", { open: !!(src && (src.priority !== undefined || "soft" in src || src.relax)) }, h("summary", {}, "Options avancées"),
+    h("div", { class: "form-grid" },
+      h("label", { class: "field" }, "Priorité",
+        h("input", { class: "in", type: "number", step: 1, placeholder: String(base), value: String(F.priority), oninput: e => { F.priority = e.target.value; } }),
+        h("span", { class: "help" }, `Vide = ${base}. En cas de conflit sur la même paire, la priorité la plus haute l'emporte.`)),
+      h("div", { class: "field" }, "Souple ou stricte",
+        h("div", { style: "display:flex;gap:16px;flex-wrap:wrap" }, opt(`Par défaut (${dflt})`, "default", "x"), opt("Stricte", "no", "x"), opt("Souple", "yes", "x")),
+        h("span", { class: "help" }, "Une règle souple peut être violée, en dernier recours, quand aucun tirage n'est possible autrement.")),
+      type === "couple" || type === "group" || type === "history" ? h("label", { class: "field" }, "Quand la règle doit céder, sacrifier",
+        h("select", { class: "in", onchange: e => { F.relax = e.target.value; } },
+          h("option", { value: "default", selected: F.relax === "default" }, `Par défaut (${type === "history" ? "paire par paire" : "la règle entière"})`),
+          h("option", { value: "pair", selected: F.relax === "pair" }, "Seulement les paires nécessaires"),
+          h("option", { value: "rule", selected: F.relax === "rule" }, "La règle entière, en bloc")),
+        h("span", { class: "help" }, "Ne compte que si la règle est souple.")) : null));
+  body.append(adv);
+  const err = h("div", { class: "dlg-err", role: "alert" }); body.append(err);
+
+  openDialog({
+    title: (editing ? "Modifier la " : "Ajouter une ") + titles[type].replace(/^(règle|paire|couple|groupe)/, m => m), wide: false, content: body,
+    actions: [{ label: "Annuler", value: false }, { label: editing ? "Enregistrer" : "Ajouter", kind: "primary", value: true, onClick: () => {
+      const bad = m => { err.textContent = m; return false; };
+      if (type === "forbidden" || type === "forced" || type === "couple") {
+        if (!F.a || !F.b) return bad("Choisissez les deux personnes.");
+        if (F.a === F.b) return bad("Les deux personnes doivent être différentes.");
+      }
+      if (type === "group" && F.members.length < 2) return bad("Un groupe compte au moins 2 personnes.");
+      if (type === "history" && !(Number.isInteger(+F.last) && +F.last >= 1)) return bad("Indiquez un nombre de tirages entier, au moins 1.");
+      if (String(F.priority).trim() !== "" && !Number.isInteger(+F.priority)) return bad("La priorité doit être un nombre entier.");
+
+      const o = { ...(src || {}) };
+      if (type === "forbidden" || type === "forced") { o.from = F.a; o.to = F.b; }
+      if (type === "couple") o.members = [F.a, F.b];
+      if (type === "group") o.members = [...F.members];
+      if (type === "history") o.last = +F.last;
+      const setOrDrop = (k, v) => { if (v === undefined) delete o[k]; else o[k] = v; };
+      setOrDrop("priority", String(F.priority).trim() === "" ? undefined : +F.priority);
+      setOrDrop("soft", F.soft === "default" ? undefined : F.soft === "yes");
+      if (type === "couple" || type === "group" || type === "history") setOrDrop("relax", F.relax === "default" ? undefined : F.relax);
+
+      if (type === "history") S.rules.history = o;
+      else if (editing) listFor(type)[idx] = o; else listFor(type).push(o);
+      touchRules();
+    } }],
+  });
+}
+
+/* ================================================================
+   Simulation
+================================================================ */
+function newAgg(res) {
+  const n = res.names.length, k = pairs => new Set(pairs.map(p => p.join(",")));
+  const forced = k(res.forced), hard = k(res.hard_forbidden);
+  // A forced pair f -> t also makes t impossible for everybody else.
+  for (const [f, t] of res.forced) for (let x = 0; x < n; x++) if (x !== f && x !== t) hard.add(x + "," + t);
+  return { names: res.names, counts: res.counts.map(r => r.map(() => 0)), done: 0, hard, soft: k(res.soft_forbidden), forced, violations: {}, runsWithViolation: 0, infeasible: false };
+}
+function renderSim(panel) {
+  panel.append(pageHead("Simulation", "Lancez des centaines de tirages d'essai pour voir ce que vos règles permettent. Rien n'est écrit, et ces tirages n'ont aucun lien avec le vrai."));
+  const sim = S.sim;
+  const runs = h("select", { class: "in", id: "simRuns", disabled: sim.running }, ...[50, 100, 200, 500, 1000].map(n => h("option", { value: n, selected: n === sim.total }, String(n))));
+  runs.addEventListener("change", e => { sim.total = +e.target.value; });
+  const year = h("input", { class: "in", type: "number", min: 1900, max: 9999, value: String(S.year), disabled: sim.running,
+    oninput: e => { S.year = +e.target.value || S.year; scheduleValidate(); } });
+  panel.append(
+    h("div", { class: "simbar" },
+      h("label", { class: "field" }, "Nombre de tirages", runs),
+      h("label", { class: "field" }, "Année du tirage", year),
+      sim.running ? h("button", { class: "btn line", onclick: () => { sim.stop = true; } }, "Arrêter") : h("button", { class: "btn primary", onclick: startSim }, "Lancer la simulation")),
+    h("p", { class: "small muted" }, "La simulation utilise les règles affichées, même non enregistrées. L'année détermine quels tirages passés comptent pour l'historique."),
+    h("div", { id: "simOut" }));
+  renderSimOut();
+}
+async function startSim() {
+  const sim = S.sim, epoch = S.epoch; sim.running = true; sim.stop = false; sim.error = null; sim.agg = null;
+  renderPanel();
+  let batch = 10;
+  while (!sim.stop && (!sim.agg || sim.agg.done < sim.total)) {
+    const want = Math.min(batch, sim.total - (sim.agg ? sim.agg.done : 0));
+    const t0 = performance.now();
+    const res = await api("/api/simulate", { participants: serPeople(), rules: serializeRules(S.rules), year: S.year, runs: want });
+    if (epoch !== S.epoch) return;              // another set was opened meanwhile
+    if (!res.ok) { sim.error = res.error; break; }
+    if (!sim.agg) sim.agg = newAgg(res);
+    const a = sim.agg;
+    if (res.infeasible) { a.infeasible = true; break; }
+    res.counts.forEach((row, i) => row.forEach((c, j) => { a.counts[i][j] += c; }));
+    a.done += res.runs_done; a.runsWithViolation += res.runs_with_violation;
+    for (const [k, v] of Object.entries(res.violations)) a.violations[k] = (a.violations[k] || 0) + v;
+    if (res.runs_done === 0) break;
+    renderSimOut();
+    batch = Math.max(5, Math.min(100, Math.round(batch * (900 / Math.max(120, performance.now() - t0)))));
+  }
+  sim.running = false;
+  if (S.tab === "sim") renderPanel();
+}
+function renderSimOut() {
+  const out = $("#simOut"); if (!out) return;
+  const sim = S.sim, a = sim.agg; out.replaceChildren();
+  if (sim.running) out.append(h("div", { class: "progress", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": sim.total, "aria-valuenow": a ? a.done : 0 },
+    h("i", { style: `width:${a ? (100 * a.done / sim.total).toFixed(1) : 0}%` })), h("p", { class: "small muted" }, `${a ? a.done : 0} tirage${s(a ? a.done : 0)} sur ${sim.total}`));
+  if (sim.error) out.append(h("div", { class: "err-box", role: "alert" }, sim.error));
+  if (!a) { if (!sim.running && !sim.error) out.append(h("p", { class: "empty", style: "margin-top:24px" }, "Aucun résultat pour l'instant. Lancez une simulation pour voir qui peut tirer qui, et à quelle fréquence.")); return; }
+  if (a.infeasible) { out.append(h("div", { class: "err-box", role: "alert" }, "Aucun tirage ne respecte les règles strictes : rien à simuler. Corrigez les règles dans l'onglet Règles.")); return; }
+
+  const clean = a.done - a.runsWithViolation;
+  out.append(h("div", { class: "facts" },
+    h("div", { class: "fact" }, h("b", {}, String(a.done)), h("span", {}, `tirage${s(a.done)} simulé${s(a.done)}`)),
+    h("div", { class: "fact" }, h("b", {}, a.done ? Math.round(100 * clean / a.done) + " %" : "–"), h("span", {}, "sans aucune concession"))));
+  const viol = Object.entries(a.violations);
+  if (viol.length) out.append(h("p", { class: "note-line warn" }, "Règles souples violées : " + viol.map(([k, v]) => `${k} (${v} fois au total)`).join(", ") + "."));
+  const f = fairness(a); if (f) out.append(h("p", { class: "note-line" + (f.kind === "warn" ? " warn" : "") }, f.text));
+  out.append(chartEl(a), legendEl(),
+    h("p", { class: "privacy" }, "Les cases à zéro reflètent les règles, y compris l'historique des années passées. Le vrai tirage n'apparaît jamais ici."));
+}
+function chartEl(a) {
+  const n = a.names.length, max = Math.max(1, ...a.counts.flat());
+  const headH = Math.min(108, 14 + 7.5 * Math.max(...a.names.map(x => x.length)));
+  const grid = h("div", { class: "chart", style: `--n:${n};--head:${headH}px`, role: "img", "aria-label": "Matrice des tirages simulés : une ligne par donneur, une colonne par receveur. Plus la case est claire, plus la paire est fréquente." });
+  grid.append(h("div", { class: "corner" }, "donne à"));
+  a.names.forEach(nm => grid.append(h("div", { class: "colhead", title: nm }, h("span", {}, nm))));
+  a.names.forEach((nm, i) => {
+    grid.append(h("div", { class: "rowhead", title: nm }, nm));
+    a.names.forEach((nj, j) => {
+      const key = i + "," + j, c = a.counts[i][j], pct = a.done ? Math.round(1000 * c / a.done) / 10 : 0;
+      const cls = ["cell"]; let style = null, text = "";
+      if (i === j) cls.push("self");
+      else if (a.forced.has(key)) cls.push("forced");
+      else if (a.hard.has(key)) cls.push("hard");
+      else if (c > 0) { const alpha = .12 + .88 * (c / max); cls.push("heat"); style = `background:rgba(143,172,240,${alpha.toFixed(3)});` + (alpha > .5 ? "color:#0B0F1C" : "color:#DCE4FA"); if (a.soft.has(key)) cls.push("soft-hit"); }
+      else if (a.soft.has(key)) cls.push("soft");
+      if (n <= 12 && i !== j && (c > 0 || a.forced.has(key))) text = String(Math.round(pct));
+      const why = a.forced.has(key) ? "imposée" : a.hard.has(key) ? "impossible (règle stricte)" : a.soft.has(key) ? "évitée (règle souple)" : `${pct} % des tirages`;
+      grid.append(h("div", { class: cls.join(" "), style, title: i === j ? nm : `${nm} offre à ${nj} : ${why}` }, text));
+    });
+  });
+  return h("div", { class: "chart-wrap" }, grid);
+}
+function legendEl() {
+  const sw = (cls, style, label) => h("span", {}, h("span", { class: "sw " + cls, style }), label);
+  return h("div", { class: "legend" },
+    h("span", {}, h("span", { class: "sw ramp" }), "plus clair : tirée plus souvent (en % des tirages)"),
+    sw("cell hard", "", "impossible (règle stricte)"), sw("cell soft", "", "évitée (règle souple)"), sw("cell forced", "", "imposée"));
+}
+/** Is the spread of who-draws-whom compatible with equal chances among allowed receivers? */
+function fairness(a) {
+  if (a.done < 100) return { kind: "hint", text: "Lancez au moins 100 tirages pour juger si la répartition est équilibrée." };
+  let worst = null;
+  a.names.forEach((_, i) => {
+    const allowed = [];
+    a.names.forEach((__, j) => { const k = i + "," + j; if (i !== j && !a.hard.has(k) && !a.soft.has(k) && !a.forced.has(k)) allowed.push(j); });
+    if (allowed.length < 2) return;
+    const e = 1 / allowed.length, sd = Math.sqrt(e * (1 - e) / a.done);
+    allowed.forEach(j => { const p = a.counts[i][j] / a.done, z = Math.abs(p - e) / sd; if (!worst || z > worst.z) worst = { i, j, p, e, z, k: allowed.length }; });
+  });
+  if (!worst) return { kind: "ok", text: "Presque tout est imposé ou interdit : il reste très peu de hasard." };
+  if (worst.z < 3.5) return { kind: "ok", text: "La répartition est équilibrée : aucune paire ne s'écarte nettement d'une chance égale entre les receveurs possibles." };
+  const pc = x => Math.round(1000 * x) / 10;
+  return { kind: "warn", text: `Écart notable : ${a.names[worst.i]} offre à ${a.names[worst.j]} dans ${pc(worst.p)} % des tirages, contre ${pc(worst.e)} % si les ${worst.k} receveurs possibles avaient la même chance. C'est souvent l'effet combiné de vos règles.` };
+}
+
+/* ================================================================
+   Message
+================================================================ */
+const refreshPreview = debounce(async () => {
+  const res = await api("/api/template/preview", { text: S.template, year: S.year });
+  S.preview = res; renderPreview();
+}, 250);
+function renderMessage(panel) {
+  panel.append(pageHead("Message", "Le mail que chaque participant reçoit. Il est enregistré dans message.txt."));
+  const ta = h("textarea", { class: "in", id: "tpl", spellcheck: false, "aria-label": "Modèle du message", oninput: e => { S.template = e.target.value; afterEdit(); refreshPreview(); } }, S.template);
+  const insert = v => { const a = ta.selectionStart, b = ta.selectionEnd; ta.setRangeText(v, a, b, "end"); ta.focus(); S.template = ta.value; afterEdit(); refreshPreview(); };
+  const helps = { santa: "le participant qui reçoit le mail", recipient: "la personne dont il est le Père Noël", year: "l'année du tirage" };
+  panel.append(h("div", { class: "msg-grid" },
+    h("div", {},
+      h("div", { class: "vars" }, h("span", { class: "small muted" }, "Insérer :"), ...S.defaults.variables.map(v => h("button", { class: "btn line small", title: helps[v] || "", onclick: () => insert("{" + v + "}") }, "{" + v + "}"))),
+      ta,
+      h("p", { class: "help", style: "margin-top:8px" }, "Première ligne : « Subject: … », puis une ligne vide, puis le message. Pour une vraie accolade, doublez-la : {{ ou }}."),
+      S.templateExists ? null : h("p", { class: "help" }, "message.txt n'existe pas encore : le message par défaut est utilisé tant que vous n'enregistrez pas.")),
+    h("div", {}, h("div", { id: "preview" }))));
+  renderPreview();
+}
+function renderPreview() {
+  const box = $("#preview"); if (!box) return; box.replaceChildren();
+  const p = S.preview;
+  if (!p) { box.append(h("div", { class: "mail" }, h("p", { class: "muted" }, "Aperçu en cours…"))); return; }
+  if (!p.ok) { box.append(h("div", { class: "mail" }, h("p", { class: "muted" }, "L'aperçu reviendra dès que le modèle sera valide.")), h("div", { class: "err-box", role: "alert" }, p.error)); return; }
+  box.append(h("div", { class: "mail" }, h("div", { class: "to" }, `Aperçu avec des personnages fictifs : ${p.santa || "Mère Noël"} écrit à ${p.recipient || "Rudolph"}`), h("div", { class: "subj" }, p.subject), h("div", { class: "body" }, p.body)));
+}
+
+/* ================================================================
+   Draw
+================================================================ */
+function renderDraw(panel) {
+  panel.append(pageHead("Tirage", "Lance le vrai tirage : un mail par participant, et le résultat est ajouté à l'historique. Les paires ne s'affichent jamais ici."));
+  const dirty = isDirty();
+  if (dirty) panel.append(h("div", { class: "banner" }, h("span", {}, "Le tirage lit les fichiers enregistrés. Enregistrez d'abord vos modifications."), h("button", { class: "btn line", onclick: save }, "Enregistrer")));
+  const year = h("input", { class: "in", type: "number", min: 1900, max: 9999, value: String(S.year), disabled: S.draw.busy,
+    oninput: e => { S.year = +e.target.value || S.year; scheduleValidate(); } });
+  const left = h("div", {},
+    h("h3", {}, "Lancer un tirage"),
+    h("p", { class: "muted" }, "Vérifiez d'abord : le test à blanc applique toutes les règles et montre le message, sans rien écrire."),
+    h("div", { class: "runbar" },
+      h("label", { class: "field" }, "Année", year),
+      h("button", { class: "btn line", disabled: dirty || S.draw.busy, onclick: () => runDraw(true) }, "Vérifier sans écrire"),
+      h("button", { class: "btn primary", disabled: dirty || S.draw.busy, onclick: officialDraw }, "Lancer le tirage officiel")),
+    h("div", { id: "drawOut" }));
+  const right = h("div", {}, h("h3", {}, "Historique"), h("p", { class: "muted" }, "Les tirages passés servent à éviter les mêmes paires d'une année sur l'autre. Les paires restent cachées."),
+    h("div", { id: "histOut" }));
+  panel.append(h("div", { class: "draw-grid" }, left, right));
+  renderDrawOut(); renderHistory();
+}
+function renderDrawOut() {
+  const out = $("#drawOut"); if (!out) return; out.replaceChildren();
+  const d = S.draw; if (!d.lines) return;
+  out.append(h("div", { class: "console", role: "status" }, d.lines.map(l => h("div", { class: "ln " + l.level }, l.text))));
+  if (d.ok && d.kind === "official") out.append(h("p", { class: "next" }, "Les mails sont dans ", h("code", {}, "secretSantaFiles/"), ". Pour les envoyer : ", h("code", {}, "./ssm.sh -s -d secretSantaFiles")));
+}
+async function runDraw(dry, extra = {}) {
+  S.draw.busy = true; renderPanel();
+  const res = await api("/api/draw", { year: S.year, dry_run: dry, ...extra });
+  S.draw.busy = false;
+  if (res._status === 409) {
+    const ok = await confirmDialog({ title: `Remplacer le tirage ${S.year} ?`, label: "Remplacer", danger: true,
+      text: `Un tirage ${S.year} existe déjà dans l'historique. Le nouveau tirage le remplacera, et les mails seront réécrits.` });
+    if (ok) return runDraw(dry, { ...extra, overwrite: true });
+    renderPanel(); return;
+  }
+  if (!res.ok && !res.lines) { S.draw = { busy: false, ok: false, kind: dry ? "check" : "official", lines: [{ level: "error", text: res.error || "Le tirage a échoué." }] }; }
+  else {
+    S.draw = { busy: false, ok: res.ok, kind: dry ? "check" : "official", lines: res.lines };
+    if (res.history) S.history = res.history;
+  }
+  renderPanel();
+  if (!dry && res.ok) toast(`Tirage ${S.year} enregistré.`, "good");
+}
+async function officialDraw() {
+  const exists = S.history.some(x => x.year === S.year);
+  const ok = await confirmDialog({ title: `Lancer le tirage ${S.year} ?`, label: "Lancer le tirage", danger: false,
+    text: `Un mail est écrit pour chaque participant dans secretSantaFiles/, et le tirage est ajouté à l'historique de ${S.year}${exists ? " en remplaçant celui qui existe" : ""}. Rien n'est envoyé, et les paires ne s'affichent pas.` });
+  if (ok) runDraw(false, { confirm: true });
+}
+function renderHistory() {
+  const out = $("#histOut"); if (!out) return; out.replaceChildren();
+  const rows = S.history.map(x => {
+    if (x.year === null) return h("div", { class: "hrow" }, h("span", { class: "info" }, `${x.file} : fichier illisible.`));
+    const relaxed = (x.relaxed_rules || []).map(r => typeof r === "string" ? r : `${r.source} (${r.violations})`);
+    return h("div", { class: "hrow" },
+      h("span", { class: "yr" }, String(x.year)),
+      h("span", { class: "info" }, h("b", {}, `${x.count} paire${s(x.count)}`), x.imported ? ", importé" : x.generated_at ? ", généré le " + x.generated_at.replace("T", " à ").slice(0, 18) : "",
+        relaxed.length ? h("div", { class: "small", style: "color:var(--straw)" }, "Concessions : " + relaxed.join(", ")) : null),
+      S.unsafe && x.year < S.year ? h("button", { class: "btn ghost small", onclick: () => viewDraw(x.year), "aria-label": `Voir les paires du tirage ${x.year}` }, "Voir") : null,
+      h("button", { class: "btn ghost danger small", onclick: () => setAside(x.year), "aria-label": `Mettre de côté le tirage ${x.year}` }, "Mettre de côté"));
+  });
+  out.append(h("div", { class: "hist" }, rows.length ? rows : h("p", { class: "empty" }, "Aucun tirage enregistré.")),
+    h("div", { style: "margin-top:14px" }, h("button", { class: "btn line", onclick: importDialog }, "Importer un ancien tirage")));
+}
+async function setAside(year) {
+  const ok = await confirmDialog({ title: `Mettre le tirage ${year} de côté ?`, label: "Mettre de côté", danger: true,
+    text: `Il ne comptera plus pour l'historique. Le fichier est conservé sous le nom history/${year}.json.bak, vous pouvez le remettre à la main.` });
+  if (!ok) return;
+  const res = await api("/api/history/delete", { year });
+  if (!res.ok) return toast(res.error, "error");
+  S.history = res.history; renderHistory(); runValidate(); toast(`Tirage ${year} mis de côté.`);
+}
+function importDialog() {
+  const yr = h("input", { class: "in", type: "number", min: 1900, max: 9999, value: String(S.year - 1) });
+  const ta = h("textarea", { class: "in", rows: 8, placeholder: "Alice > Bob\nBob > Carol\nCarol > Alice", spellcheck: false });
+  const err = h("div", { class: "dlg-err", role: "alert" });
+  let overwrite = false;
+  openDialog({
+    title: "Importer un ancien tirage", wide: true,
+    content: h("div", { class: "form-grid" },
+      h("p", { class: "help" }, "Pour un tirage fait avant d'utiliser cet outil : une paire par ligne, « donneur > receveur ». Chaque personne doit apparaître une fois comme donneur et une fois comme receveur."),
+      h("label", { class: "field", style: "width:140px" }, "Année", yr), ta, err),
+    actions: [{ label: "Annuler", value: false }, { label: "Importer", kind: "primary", value: true, onClick: async () => {
+      const send = () => api("/api/history/import", { year: +yr.value, text: ta.value, overwrite });
+      let res = await send();
+      if (res._status === 409) {
+        if (!(await confirmDialog({ title: `Remplacer le tirage ${yr.value} ?`, label: "Remplacer", danger: true, text: "Un tirage existe déjà pour cette année." }))) return false;
+        overwrite = true; res = await send();
+      }
+      if (!res.ok) { err.textContent = res.error; return false; }
+      S.history = res.history; renderHistory(); runValidate();
+      toast(`Tirage ${yr.value} importé` + (res.unknown.length ? ` (${res.unknown.join(", ")} ne fait plus partie des participants)` : "") + ".", "good");
+    } }],
+  });
+}
+
+/* ================================================================
+   Sets: several participant lists, each with its own rules, message and history
+================================================================ */
+const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
+const setMeta = x => {
+  const r = x.rules, bits = [plural(x.participants, "personne", "personnes")];
+  const n = r.couples + r.groups + r.forbidden + r.forced + (r.history ? 1 : 0);
+  bits.push(n ? plural(n, "règle", "règles") : "aucune règle");
+  if (x.history_years.length) bits.push("tirage" + s(x.history_years.length) + " " + x.history_years.slice(-3).join(", "));
+  return bits.join(" · ");
+};
+const storeGet = () => { try { return localStorage.getItem("santa.set"); } catch { return null; } };
+const storeSet = v => { try { v ? localStorage.setItem("santa.set", v) : localStorage.removeItem("santa.set"); } catch { /* private mode: not essential */ } };
+const curSet = () => S.sets.find(x => x.id === S.setId);
+
+async function refreshSets() {
+  const res = await api("/api/sets");
+  if (res.ok) { S.sets = res.sets; S.root = res.root; }
+  return res;
+}
+async function boot() {
+  const res = await refreshSets();
+  if (!res.ok) { $("#panel").replaceChildren(h("div", { class: "err-box" }, res.error || "Impossible de charger les ensembles.")); return; }
+  await pickInitialSet();
+}
+async function pickInitialSet() {
+  const want = storeGet(), id = S.sets.some(x => x.id === want) ? want : (S.sets[0] && S.sets[0].id) || null;
+  S.setId = id; S.epoch++; storeSet(id);
+  if (!id) { renderAll(); return; }
+  await load();
+}
+
+/** Open another set, guarding unsaved edits and running work. */
+async function switchSet(id) {
+  closeMenu();
+  if (id === S.setId) return true;
+  if (S.sim.running) S.sim.stop = true;
+  if (S.draw.busy) { toast("Un tirage est en cours : attendez la fin avant de changer d'ensemble.", "error"); return false; }
+  if (S.setId && isDirty()) {
+    const choice = await openDialog({
+      title: "Modifications non enregistrées",
+      content: h("p", {}, `Des changements dans « ${curSet() ? curSet().name : "cet ensemble"} » ne sont pas enregistrés.`),
+      actions: [{ label: "Rester ici", value: "stay" }, { label: "Abandonner", kind: "danger", value: "discard" }, { label: "Enregistrer puis changer", kind: "primary", value: "save" }],
+    });
+    if (choice !== "discard" && choice !== "save") return false;
+    if (choice === "save") { await save(); if (isDirty()) return false; }   // save() reports why it failed
+  }
+  S.setId = id; S.epoch++; storeSet(id);
+  S.sim = { running: false, stop: false, total: S.sim.total, agg: null, error: null };
+  S.draw = { busy: false, lines: null, kind: null, ok: null };
+  history.replaceState(null, "", location.pathname);
+  await load();
+  return true;
+}
+
+/* ---------- switcher in the header ---------- */
+let menuEl = null, switcherSig = "";
+function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; document.querySelectorAll(".setbtn, .optbtn").forEach(b => b.setAttribute("aria-expanded", "false")); } }
+function renderSetSwitcher() {
+  const wrap = $("#setwrap"); if (!wrap) return;
+  const cur = curSet(), sig = JSON.stringify([S.setId, cur && cur.name, cur && cur.path]);
+  if (sig === switcherSig && wrap.firstChild) return;   // header re-renders on every edit: keep an open menu open
+  switcherSig = sig; closeMenu();
+  // Tabler icon "chevron-down" (tabler.io/icons), inlined so the page stays self-contained.
+  const chevron = () => { const n = document.createElementNS("http://www.w3.org/2000/svg", "svg"); n.setAttribute("width", "16"); n.setAttribute("height", "16"); n.setAttribute("viewBox", "0 0 24 24"); n.setAttribute("aria-hidden", "true");
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", "M6 9l6 6l6 -6"); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "2"); p.setAttribute("stroke-linecap", "round"); p.setAttribute("stroke-linejoin", "round"); n.append(p); return n; };
+  wrap.replaceChildren(h("button", { class: "setbtn", "aria-haspopup": "menu", "aria-expanded": "false", title: cur ? cur.path : "", onclick: toggleMenu },
+    h("span", { class: "t" }, h("span", { class: "k" }, "Ensemble"), h("span", { class: "v" }, cur ? cur.name : "Aucun")), chevron()));
+}
+function toggleMenu() {
+  if (menuEl) return closeMenu();
+  const btn = $(".setbtn"); btn.setAttribute("aria-expanded", "true");
+  menuEl = h("div", { class: "menu", role: "menu", "aria-label": "Ensembles" },
+    ...S.sets.map(x => h("button", { class: "mi", role: "menuitemradio", "aria-checked": String(x.id === S.setId), onclick: () => switchSet(x.id) },
+      h("span", { class: "ck", "aria-hidden": "true" }, x.id === S.setId ? "✓" : ""), h("span", { class: "nm" }, x.name), h("span", { class: "meta" }, setMeta(x)))),
+    S.sets.length ? h("hr") : null,
+    h("button", { class: "mi act", role: "menuitem", onclick: () => { closeMenu(); newSetDialog(); } }, "Nouvel ensemble…"),
+    h("button", { class: "mi act", role: "menuitem", onclick: () => { closeMenu(); manageDialog(); } }, "Gérer les ensembles…"));
+  $("#setwrap").append(menuEl);
+  const items = [...menuEl.querySelectorAll(".mi")];
+  (items.find(i => i.getAttribute("aria-checked") === "true") || items[0]).focus();
+  menuEl.addEventListener("keydown", e => {
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === "Escape") { e.stopPropagation(); closeMenu(); btn.focus(); }
+  });
+}
+document.addEventListener("click", e => { if (menuEl && !e.target.closest("#setwrap, #optwrap")) closeMenu(); });
+
+/* ---------- create / copy ---------- */
+async function newSetDialog({ from = null, suggest = "" } = {}) {
+  const name = h("input", { class: "in", type: "text", maxlength: 60, value: suggest, placeholder: "Famille, Bureau, Amis du lycée…", autocomplete: "off", "aria-label": "Nom de l'ensemble" });
+  const err = h("div", { class: "dlg-err", role: "alert" });
+  let source = from;
+  const copyMsg = h("input", { type: "checkbox", checked: true }), copyHist = h("input", { type: "checkbox" });
+  const opts = h("div", { class: "form-grid" });
+  const redraw = () => {
+    opts.replaceChildren(
+      h("label", { class: "field" }, "Point de départ",
+        h("select", { class: "in", onchange: e => { source = e.target.value || null; redraw(); } },
+          h("option", { value: "" }, "Un ensemble vide"),
+          ...S.sets.map(x => h("option", { value: x.id, selected: x.id === source }, "Copie de « " + x.name + " »")))),
+      source ? h("div", { class: "form-grid" },
+        h("p", { class: "help" }, "Les participants et les règles sont copiés. Ensuite, les deux ensembles évoluent séparément."),
+        h("label", { class: "radio-line" }, copyMsg, h("span", {}, "Copier aussi le message")),
+        h("label", { class: "radio-line" }, copyHist, h("span", {}, h("span", {}, "Copier aussi l'historique des tirages "), h("span", { class: "help" }, "(pour tester une variante des mêmes personnes)")))) : null);
+  };
+  redraw();
+  const done = await openDialog({
+    title: "Nouvel ensemble",
+    content: h("div", { class: "form-grid" }, h("label", { class: "field" }, "Nom", name), opts, err),
+    actions: [{ label: "Annuler", value: false }, { label: "Créer et ouvrir", kind: "primary", value: true, onClick: async () => {
+      const res = await api("/api/sets/create", { name: name.value, from: source, copy_message: copyMsg.checked, copy_history: copyHist.checked });
+      if (!res.ok) { err.textContent = res.error; return false; }
+      S.sets = res.sets; S.pendingOpen = res.id;
+    } }],
+  });
+  if (done === true && S.pendingOpen) { const id = S.pendingOpen; S.pendingOpen = null; await switchSet(id); toast(`Ensemble « ${id} » créé.`, "good"); }
+  return done;
+}
+async function renameSetDialog(x) {
+  const name = h("input", { class: "in", type: "text", maxlength: 60, value: x.name, "aria-label": "Nouveau nom" });
+  const err = h("div", { class: "dlg-err", role: "alert" });
+  return openDialog({
+    title: `Renommer « ${x.name} »`,
+    content: h("div", { class: "form-grid" }, h("label", { class: "field" }, "Nom", name), err),
+    actions: [{ label: "Annuler", value: false }, { label: "Renommer", kind: "primary", value: true, onClick: async () => {
+      const res = await api("/api/sets/rename", { id: x.id, name: name.value });
+      if (!res.ok) { err.textContent = res.error; return false; }
+      S.sets = res.sets; if (S.setId === x.id) { S.setId = res.id; storeSet(res.id); }
+    } }],
+  });
+}
+async function deleteSetDialog(x) {
+  const ok = await confirmDialog({ title: `Supprimer « ${x.name} » ?`, label: "Supprimer", danger: true,
+    text: "L'ensemble disparaît de la liste. Son dossier est déplacé dans sets/.trash : rien n'est effacé, vous pouvez le remettre à la main." });
+  if (!ok) return false;
+  const res = await api("/api/sets/delete", { id: x.id });
+  if (!res.ok) { toast(res.error, "error"); return false; }
+  S.sets = res.sets; toast(`« ${x.name} » supprimé.`);
+  if (S.setId === x.id) { S.setId = null; S.epoch++; await pickInitialSet(); }
+  return true;
+}
+
+/* ---------- manager dialog ---------- */
+function manageDialog() {
+  const list = h("div", { class: "setlist" });
+  const draw = () => {
+    list.replaceChildren(...(S.sets.length ? S.sets.map(x => h("div", { class: "srow" },
+      h("div", { class: "who" }, h("b", { title: x.path }, x.name), h("span", {}, setMeta(x))),
+      x.id === S.setId ? h("span", { class: "cur" }, "ouvert") : null,
+      h("div", { class: "acts" },
+        x.id === S.setId ? null : h("button", { class: "btn ghost small", onclick: async () => { if (await switchSet(x.id)) dlgClose(); } }, "Ouvrir"),
+        h("button", { class: "btn ghost small", onclick: async () => { if ((await newSetDialog({ from: x.id, suggest: x.name + " (copie)" })) === true) dlgClose(); } }, "Dupliquer"),
+        x.legacy ? null : h("button", { class: "btn ghost small", onclick: async () => { await renameSetDialog(x); draw(); renderHeader(); } }, "Renommer"),
+        x.legacy ? null : h("button", { class: "btn ghost danger small", onclick: async () => { if (await deleteSetDialog(x)) { draw(); renderAll(); } } }, "Supprimer")))) : [h("p", { class: "empty" }, "Aucun ensemble pour l'instant.")]));
+  };
+  let dlgClose = () => {};
+  draw();
+  const root = h("p", { class: "help", title: S.root ? S.root + "/sets" : "" }, "Chaque ensemble est un dossier de sets/ : participants, règles, message et historique restent ensemble.");
+  const p = openDialog({ title: "Ensembles", wide: true, content: h("div", { class: "form-grid" }, root, list),
+    actions: [{ label: "Nouvel ensemble…", kind: "line", value: "new", onClick: () => { setTimeout(() => newSetDialog(), 0); return true; } }, { label: "Fermer", kind: "primary", value: true }] });
+  dlgClose = () => { const d = document.querySelector("dialog[open]"); if (d) d.close(); };
+  return p;
+}
+
+/* ---------- first run ---------- */
+function renderWelcome(p) {
+  const name = h("input", { class: "in", type: "text", maxlength: 60, placeholder: "Famille, Bureau, Amis du lycée…", autocomplete: "off", "aria-label": "Nom du premier ensemble" });
+  const err = h("div", { class: "dlg-err", role: "alert" });
+  const create = async () => {
+    const res = await api("/api/sets/create", { name: name.value });
+    if (!res.ok) { err.textContent = res.error; return; }
+    S.sets = res.sets; await switchSet(res.id);
+  };
+  name.addEventListener("keydown", e => { if (e.key === "Enter") create(); });
+  p.append(h("div", { class: "welcome" },
+    h("h2", {}, "Créons votre premier ensemble"),
+    h("p", {}, "Un ensemble réunit une liste de participants et ses règles, son message et son historique. Vous pourrez en avoir autant que de groupes : la famille, le bureau, les amis."),
+    h("div", { class: "row" }, name, h("button", { class: "btn primary", onclick: create }, "Créer")), err));
+  setTimeout(() => name.focus(), 0);
+}
+
+/* ================================================================
+   Boot
+================================================================ */
+document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save(); } });
+window.addEventListener("beforeunload", e => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.some(x => x[0] === t) && t !== S.tab) go(t); });
+boot();
+</script>
+</body>
+</html>
